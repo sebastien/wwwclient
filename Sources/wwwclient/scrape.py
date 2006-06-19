@@ -37,18 +37,22 @@ class Form:
 		self.inputs = []
 		self.values = {}
 
-	def fields( self ):
-		return filter(lambda f:f.get("name") and f.get("type") != "submit", self.inputs)
+	def fields( self, namesOnly=False ):
+		res = filter(lambda f:f.get("type") != "submit", self.inputs)
+		if namesOnly: res = tuple(f.get("name") for f in res)
+		return res
 	
-	def actions( self ):
-		return filter(lambda f:f.get("type")=="submit", self.inputs)
+	def actions( self, namesOnly=False ):
+		res = filter(lambda f:f.get("type")=="submit", self.inputs)
+		if namesOnly: res = tuple(f.get("name") for f in res)
+		return res
 
-	def prefill( self ):
-		for inp in self.inputs:
-			name  = inp.get("name")
-			value = inp.get("value")
-			if name and value: self.values[name] = value
-	
+	def clear( self ):
+		"""Clears the existing values set in this form, and returns them."""
+		old_values = self.values
+		self.values = {}
+		return old_values
+
 	def fill( self, **values ):
 		field_names = map(lambda f:f.get("name"), self.fields())
 		for name, value in values.items():
@@ -62,6 +66,30 @@ class Form:
 		self.fill(**values)
 		# TODO: Continue implementation
 
+	def parameters( self ):
+		"""Returns a list of (key,value) respecting the original input order."""
+		res   = []
+		names = []
+		for field in self.inputs:
+			name = field.get("name")
+			names.append(name)
+			if not name: continue
+			if self.values.get(name) == None: continue
+			res.append((name, self.values.get(name)))
+		# The user may have added specific parameters that do not correspond to
+		# a specific input, so we ensure that they are added here
+		for key, value in self.values.items():
+			if key not in names:
+				res.append((key, value))
+		return res
+
+	def _prefill( self ):
+		"""Sets the default values for this form."""
+		for inp in self.inputs:
+			name  = inp.get("name")
+			value = inp.get("value")
+			if name and value: self.values[name] = value
+	
 	def __repr__( self ):
 		return repr(self.inputs)
 
@@ -180,11 +208,14 @@ class Scraper:
 			elif name == "input":
 				assert current_form
 				# TODO: Make this nicer
-				if filter(lambda s:s.startswith("on"), attributes.keys()):
-					print "Warning: Form may contain JavaScript: ", current_form.name, "in input", attributes
+				js = filter(lambda s:s[0].startswith("on"), attributes.items())
+				if js:
+					print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
 				current_form.inputs.append(attributes)
 			else:
 				raise Exception("Unexpected tag: " + name)
+		# Prefills the forms
+		for form in forms.values(): form._prefill()
 		return forms
 
 # EOF

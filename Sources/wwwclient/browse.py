@@ -9,7 +9,7 @@
 # Last mod  : 19-Jun-2006
 # -----------------------------------------------------------------------------
 
-import httplib, urllib, mimetypes
+import urllib, urllib2, httplib, mimetypes
 import urlparse
 import re
 
@@ -63,6 +63,9 @@ class Parameters:
 		if parameters == None: return
 		if type(parameters) == dict:
 			for name, value in parameters.items():
+				self.add(name, value)
+		elif type(parameters) in (tuple, list):
+			for name, value in parameters:
 				self.add(name, value)
 		else:
 			for name, value in parameters.pairs:
@@ -137,27 +140,29 @@ class Request:
 		else:
 			return self._url
 	
-	def header( self, name, value=urllib ):
+	def header( self, name, value=urllib2 ):
 		"""Gets or set the given header."""
-		if value == urllib:
+		if value == urllib2:
 			return self._headers.get(name)
 		else:
 			self._headers[name] = str(value)
 
 	def headers( self ):
-		"""Returns the headers for this request."""
+		"""Returns the headers for this request, sorted in the proper order."""
 		headers = {}
 		headers.update(self._headers)
 		# Takes care of cookies
-		headers.setdefault('Cookie', ";".join([ "%s=%s" % (k,urllib.quote(v)) for k,v in self.cookies.pairs]))
+		if self.cookies.pairs:
+			headers.setdefault('Cookie', ";".join([ "%s=%s" % (k,urllib.quote(v)) for k,v in self.cookies.pairs]))
 		# Takes care of content type
 		if self.attachments:
 			headers.setdefault("Content-Type", "multipart/form-data; boundary=%s" % (Request.BOUNDARY))
 		elif self._method == POST:
 			headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
 		# Takes care of content length
-		body = self.body()
-		headers.setdefault("Content-Length", str(len(body)))
+		body = str(self.body())
+		if body or headers.get("Content-Type"):
+			headers.setdefault("Content-Length", str(len(body)))
 		return headers
 	
 	def body( self ):
@@ -221,16 +226,39 @@ class Transaction:
 	
 	def do( self, mergeCookies=True ):
 		if self.done: return
+		# OLD HTTPLIB
+		# ==================================
+		# We prepare the headers
+		headers = self.request.headers() 
+		headers["Connection"] = "close"
 		# We send the request
 		connection = self.session.protocol(self.session.host)
 		connection.request(self.request.method(), self.request.url(),
-		self.request.body(), self.request.headers() )
+		self.request.body(), headers )
 		print self.request.method(), self.request.url()
 		# And get the response
 		self.response = connection.getresponse()
 		self.status   = self.response.status
-		self.data  = self.response.read()
-		connection.close()
+		try:
+			self.data  = self.response.read()
+		except httplib.IncompleteRead, e:
+			raise e
+		print "REQ", self.request.url()
+		print "REQ", self.request.headers()
+		print "REQ", self.request.body()
+		print "REPONSE", self.status
+		print "REPONSE", self.response.msg
+		# ==================================
+		
+		# full_url = self.session._absoluteURL(self.request.url())
+		# print "Doing", self
+		# request = urllib2.Request( full_url, self.request.body(), self.request.headers())
+		# print "REQ ",  full_url
+		# self.response = urllib2.urlopen(request)
+		# self.data     = self.response.read()
+		# print "RES ", self.response.url
+		# print "DATA", len(self.data)
+# 
 		redirect_url = None
 		# We parse the response headers (for cookies)
 		for header in self.response.msg.headers:
@@ -242,12 +270,16 @@ class Transaction:
 				self.cookies.add(name, urllib.unquote(cookie_value))
 			elif header.lower().strip() == "location":
 				redirect_url = value
+
+		print "REDIRECT", redirect_url
+		print
 		# We merge the cookies if necessary
 		if mergeCookies:
 			self.session.cookies.merge(self.cookies)
+
 		# We take care of URL redirection
-		if redirect_url != None:
-			self.redirect = self.session.get(redirect_url, do=False)
+		#if redirect_url != None:
+		#	self.redirect = self.session.get(redirect_url, do=False)
 		self.done = True
 		return self
 
@@ -272,6 +304,7 @@ class Session:
 		@maxTransactions	Maximum number of transactions in registered in
 							this session
 		@cookies			List of cookies for this session
+		@userAgent			String for this user session agent
 
 	"""
 
@@ -284,6 +317,7 @@ class Session:
 		self.protocol        = HTTP
 		self.transactions    = []
 		self.cookies         = Parameters()
+		self.userAgent       = "Mozilla/5.0 (X11; U; Linux i686; fr; rv:1.8.0.4) Gecko/20060608 Ubuntu/dapper-security"
 		self.maxTransactions = self.MAX_TRANSACTIONS
 		if url: self.get(url)
 
@@ -292,52 +326,82 @@ class Session:
 		transaction in the session."""
 		if not self.transactions: return None
 		return self.transactions[-1]
+	
+	def referer( self ):
+		last = self.last()
+		if not last: return None
+		if self.protocol == HTTP: protocol = "http://"
+		elif self.protocol == HTTPS: protocol = "https://"
+		else: raise Exception("Incomplete implementation")
+		url = protocol + self.host + last.request.url()
+		return url
+
+	def _createRequest( self, **kwargs ):
+		request = Request(**kwargs)
+		last    = self.last()
+		#request.header("User-Agent", self.userAgent)
+		request.header("Accept", "text/html; */*")
+		request.header("Connection", "close")
+		if last: request.header("Referer", self.referer())
+		if self.host: request.header("Host", self.host)
+		return request
 
 	def get( self, url="/", params=None, follow=True, do=True ):
+		print "GETTING", url
 		url = self.__processURL(url)
-		request = Request( url=url, params=params )
+		request = self._createRequest( url=url, params=params )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		# We do the transaction
 		if do:
 			transaction.do()
 			# And follow the redirect if any
-			while transaction.redirect and follow:
-				transaction = transaction.redirect.do()
+			#while transaction.redirect and follow:
+			#	transaction = transaction.redirect.do()
 		return transaction
 
 	def post( self, url=None, params=None, do=True ):
 		url = self.__processURL(url)
-		request = Request( method=POST, url=url, params=params )
+		request = self._createRequest( method=POST, url=url, params=params )
+		request.cookies.add("RMID", "cf609f024496e240")
+		request.header("Connection", "close")
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		if do: transaction.do()
 		return transaction
 	
-	def submit( self, form, values, action=None, prefill=True, method=POST, do=True ):
+	def submit( self, form, values=None, action=None,  method=POST, do=True ):
 		"""Submits the given form with the current values and action (first
-		action by default) to the form action url,
-		prefilling the form with the default values (yes by default), and doing
-		a post with the resulting values (yes by default).
+		action by default) to the form action url, and doing
+		a POST or GET with the resulting values (POST by default).
 
 		The submit method is a convenience wrapper that processes the given form
 		and gives its values as parameters to the post method."""
 		# We fill the form values
-		if prefill: form.prefill()
-		form.fill(**values)
+		if values: form.fill(**values)
 		# We set the form action
-		if action == None: action = form.actions()[0]
-		# FIXME: Checks that there are corresponding actions
-		else: action = filter(lambda a:a.get("name") == action, form.actions())[0]
-		form.values[action.get("name")] = action.get("value")
+		if action != None: 
+			# FIXME: Checks that there are corresponding actions
+			action = filter(lambda a:a.get("name") == action, form.actions())[0]
+			form.values[action.get("name")] = action.get("value")
 		# And we submit the form
 		url = form.action
 		if method == POST:
-			return self.post( url, params=form.values, do=do )
+			return self.post( url, params=form.parameters(), do=do )
 		elif method == GET:
-			return self.get( url, params=form.values, do=do )
+			return self.get( url, params=form.parameters(), do=do )
 		else:
 			raise SessionException("Unsupported method for submit: " + method)
+
+	def _absoluteURL( self, url ):
+		"""Returns the absolute URL for the given URL, using this session host
+		and protocol."""
+		if url.startswith("http") and url.find("//") != -1:
+			return url
+		elif url and url[0] == "/":
+			return  self.protocol + "://" + self.host + url
+		else: 
+			return  self.protocol + "://" + self.host + "/" + url
 
 	def __addTransaction( self, transaction ):
 		"""Adds a transaction to this session."""

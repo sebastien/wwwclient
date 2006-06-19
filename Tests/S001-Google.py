@@ -14,4 +14,5 @@ search_form = scraper.forms(session.last().data).values()[0]
 session.submit( search_form, values={"q":"Britney Spears"}, action="btnG",
 method=browse.GET ).data
 print scrape.HTML.textOnly(session.last().data)
+
 # EOF
