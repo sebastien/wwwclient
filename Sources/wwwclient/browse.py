@@ -1,4 +1,16 @@
+#!/usr/bin/env python
+# Encoding: iso-8859-1
+# vim: tw=80 ts=4 sw=4 noet
+# -----------------------------------------------------------------------------
+# Project   : WWWClient - Python client Web toolkit
+# -----------------------------------------------------------------------------
+# Author    : Sebastien Pierre <sebastien@xprima.com>
+# Creation  : 19-Jun-2006
+# Last mod  : 19-Jun-2006
+# -----------------------------------------------------------------------------
+
 import httplib, urllib, mimetypes
+import urlparse
 import re
 
 __version__ = "2.0"
@@ -11,8 +23,16 @@ POST    = "POST"
 HEAD    = "HEAD"
 METHODS = (GET, POST, HEAD)
 
+DEFAULT_MIME = "text/plain"
+
 RE_HEADER = re.compile(r"(.*?):\s*(.*?)\s*$")
 RE_COOKIE = re.compile(r"(.*);?")
+
+# -----------------------------------------------------------------------------
+#
+# PARAMETERS
+#
+# -----------------------------------------------------------------------------
 
 class Parameters:
 	"""Parameters are list of pairs (name,values) quite similar to
@@ -55,6 +75,12 @@ class Parameters:
 	def __repr__(self):
 		return repr(self.pairs)
 
+# -----------------------------------------------------------------------------
+#
+# HTTP REQUEST WRAPPER
+#
+# -----------------------------------------------------------------------------
+
 class Request:
 	"""The Request object encapsulates an HTTP request so that it is easy to
 	specify headers, cookies, data and attachments."""
@@ -65,7 +91,7 @@ class Request:
 		self._url        = url
 		self._method     = method.upper()
 		self._data       = None
-		self._dataType   = "text/plain"
+		self._dataType   = DEFAULT_MIME
 		self._headers    = {}
 		self.params      = Parameters(params)
 		self.cookies     = Parameters()
@@ -84,7 +110,7 @@ class Request:
 			fd.close()
 		else:
 			path = name
-		if not mime: mime = "text/plain"
+		if not mime: mime = DEFAULT_MIME
 		self.attachments.append((name, mime, path, data))
 	
 	def data( self, data=None, mime=None ):
@@ -162,8 +188,26 @@ class Request:
 		else:
 			return body
 
+# -----------------------------------------------------------------------------
+#
+# TRANSACTION
+#
+# -----------------------------------------------------------------------------
+
 class Transaction:
-	"""A transaction encaspulates a request and its responses."""
+	"""A transaction encaspulates a request and its responses.
+	
+	Attributes::
+
+		@session			Enclosing session
+		@request			Initiating request
+		@response			Response to the request (None by default)
+		@data				Response data
+		@cookies			Response cookies
+		@redirect			Transaction for the redirection (None by default)
+		@done				Tells if the transaction was executed or not
+	
+	"""
 
 	def __init__( self, session, request ):
 		self.session  = session
@@ -177,11 +221,11 @@ class Transaction:
 	
 	def do( self, mergeCookies=True ):
 		if self.done: return
-		print "Requesting:", self.request.method(), ":", self.request.url()
 		# We send the request
 		connection = self.session.protocol(self.session.host)
 		connection.request(self.request.method(), self.request.url(),
 		self.request.body(), self.request.headers() )
+		print self.request.method(), self.request.url()
 		# And get the response
 		self.response = connection.getresponse()
 		self.status   = self.response.status
@@ -205,47 +249,120 @@ class Transaction:
 		if redirect_url != None:
 			self.redirect = self.session.get(redirect_url, do=False)
 		self.done = True
+		return self
 
+# -----------------------------------------------------------------------------
+#
+# SESSION
+#
+# -----------------------------------------------------------------------------
+
+class SessionException(Exception): pass
 class Session:
+	"""A Session encapsulates a number of transactions (couples of request and
+	responses). The session stores common state (the cookies), that is shared by
+	the different transactions. Each session has a maximum number of transaction
+	which is given by its @maxTransactions attribute.
+
+	Attributes::
+
+		@host				Session host (by name or IP)
+		@protocol			Session protocol (either HTTP or HTTPS)
+		@transactions		List of transactions
+		@maxTransactions	Maximum number of transactions in registered in
+							this session
+		@cookies			List of cookies for this session
+
+	"""
+
 	MAX_TRANSACTIONS = 10
 
-	def __init__( self, host, protocol=HTTP ):
-		if host.startswith("http://"):
-			protocol = HTTP
-			host     = host[len("http://"):]
-		if host.startswith("https://"):
-			protocol = HTTPS
-			host     = host[len("https://"):]
-		self.host         = host
-		self.protocol     = protocol
-		self.transactions = []
-		self.cookies      = Parameters()
+	def __init__( self, url=None ):
+		"""Creates a new session at the given host, and for the given
+		protocol."""
+		self.host            = None
+		self.protocol        = HTTP
+		self.transactions    = []
+		self.cookies         = Parameters()
+		self.maxTransactions = self.MAX_TRANSACTIONS
+		if url: self.get(url)
 
 	def last( self ):
+		"""Returns the last transaction of the session, or None if there is not
+		transaction in the session."""
+		if not self.transactions: return None
 		return self.transactions[-1]
 
-	def addTransaction( self, transaction ):
-		if len(self.transactions) > self.MAX_TRANSACTIONS:
-			self.transactions = self.transactions[1:]
-		self.transactions.append(transaction)
-
-	def get( self, url=None, params=None, do=True ):
-		if not url: url = "/"
-		if not url.startswith("/"): url = "/" + url
+	def get( self, url="/", params=None, follow=True, do=True ):
+		url = self.__processURL(url)
 		request = Request( url=url, params=params )
 		transaction = Transaction( self, request )
-		self.addTransaction(transaction)
-		if do: transaction.do()
+		self.__addTransaction(transaction)
+		# We do the transaction
+		if do:
+			transaction.do()
+			# And follow the redirect if any
+			while transaction.redirect and follow:
+				transaction = transaction.redirect.do()
 		return transaction
 
 	def post( self, url=None, params=None, do=True ):
-		if not url: url = self.last().request.url()
-		if not url.startswith("/"): url = "/" + url
+		url = self.__processURL(url)
 		request = Request( method=POST, url=url, params=params )
 		transaction = Transaction( self, request )
-		self.addTransaction(transaction)
+		self.__addTransaction(transaction)
 		if do: transaction.do()
 		return transaction
+	
+	def submit( self, form, values, action=None, prefill=True, method=POST, do=True ):
+		"""Submits the given form with the current values and action (first
+		action by default) to the form action url,
+		prefilling the form with the default values (yes by default), and doing
+		a post with the resulting values (yes by default).
+
+		The submit method is a convenience wrapper that processes the given form
+		and gives its values as parameters to the post method."""
+		# We fill the form values
+		if prefill: form.prefill()
+		form.fill(**values)
+		# We set the form action
+		if action == None: action = form.actions()[0]
+		# FIXME: Checks that there are corresponding actions
+		else: action = filter(lambda a:a.get("name") == action, form.actions())[0]
+		form.values[action.get("name")] = action.get("value")
+		# And we submit the form
+		url = form.action
+		if method == POST:
+			return self.post( url, params=form.values, do=do )
+		elif method == GET:
+			return self.get( url, params=form.values, do=do )
+		else:
+			raise SessionException("Unsupported method for submit: " + method)
+
+	def __addTransaction( self, transaction ):
+		"""Adds a transaction to this session."""
+		if len(self.transactions) > self.maxTransactions:
+			self.transactions = self.transactions[1:]
+		self.transactions.append(transaction)
+	
+	def __processURL( self, url ):
+		if url == None and not self.transactions: url = "/"
+		if url == None and self.transactions: url = self.last().request.url()
+		# If we have no default host, then we ensure that there is an http
+		# prefix (for instance, www.google.com could be mistakenly interpreted
+		# as a path)
+		if self.host == None and not url.startswith("http"): url = "http://" + url
+		# And now we parse the url and update the session attributes
+		protocol, host, path, parameters, query, fragment =  urlparse.urlparse(url)
+		if   protocol == "http": self.protocol  = HTTP
+		elif protocol == "https": self.protocol = HTTPS
+		if host: self.host = host
+		if path:       url = path
+		else:          url = "/"
+		if parameters: url += ";" + parameters
+		if query:      url += "?" + query
+		if fragment:   url += "#" + fragment
+		return url
 
 # Events
 # - Redirect
@@ -254,6 +371,12 @@ class Session:
 # - Error
 # - Timeout
 # - Exception
+
+# -----------------------------------------------------------------------------
+#
+# TESTING
+#
+# -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
 	import scrape
