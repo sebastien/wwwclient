@@ -6,27 +6,19 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 19-Jun-2006
-# Last mod  : 19-Jun-2006
+# Last mod  : 20-Jun-2006
 # -----------------------------------------------------------------------------
 
-import urllib, urllib2, httplib, mimetypes
-import urlparse
-import re
+import urlparse, urllib, mimetypes, re
+import curl
 
 __version__ = "2.0"
 
-HTTP    = httplib.HTTPConnection
-HTTPS   = httplib.HTTPSConnection
-
-GET     = "GET"
-POST    = "POST"
-HEAD    = "HEAD"
-METHODS = (GET, POST, HEAD)
-
+GET          = "GET"
+POST         = "POST"
+HEAD         = "HEAD"
+METHODS      = (GET, POST, HEAD)
 DEFAULT_MIME = "text/plain"
-
-RE_HEADER = re.compile(r"(.*?):\s*(.*?)\s*$")
-RE_COOKIE = re.compile(r"(.*);?")
 
 # -----------------------------------------------------------------------------
 #
@@ -34,10 +26,11 @@ RE_COOKIE = re.compile(r"(.*);?")
 #
 # -----------------------------------------------------------------------------
 
-class Parameters:
-	"""Parameters are list of pairs (name,values) quite similar to
+class Pairs:
+	"""Pairs are list of pairs (name,values) quite similar to
 	dictionaries, excepted that there can be multiple values for a single key,
-	and that the order of the keys is preserved."""
+	and that the order of the keys is preserved. They can be easily converted to
+	URL parameters, headers and cookies."""
 
 	def __init__( self, params=None ):
 		self.pairs = []
@@ -71,10 +64,18 @@ class Parameters:
 			for name, value in parameters.pairs:
 				self.add(name, value)
 
-	def encode( self ):
+	def asURL( self ):
 		"""Returns an URL-encoded version of this parameters list."""
 		return urllib.urlencode(self.pairs)
 	
+	def asHeaders( self ):
+		"""Returns a list of header strings."""
+		return list("%s: %s" % (k,v) for k,v in self.pairs)
+
+	def asCookies( self ):
+		"""Returns these pairs as cookies"""
+		return "; ".join("%s=%s" % (k,v) for k,v in self.pairs)
+
 	def __repr__(self):
 		return repr(self.pairs)
 
@@ -96,8 +97,8 @@ class Request:
 		self._data       = None
 		self._dataType   = DEFAULT_MIME
 		self._headers    = {}
-		self.params      = Parameters(params)
-		self.cookies     = Parameters()
+		self.params      = Pairs(params)
+		self.cookies     = Pairs()
 		self.attachments = []
 		# Ensures that the method is a proper one
 		if self._method not in METHODS:
@@ -136,7 +137,7 @@ class Request:
 			if self._method == POST and not self._data:
 				return self._url
 			else:
-				return self._url + "?" + self.params.encode()
+				return self._url + "?" + self.params.asURL()
 		else:
 			return self._url
 	
@@ -189,7 +190,7 @@ class Request:
 		elif self._data:
 			body = self._data
 		if self._method == POST:
-			return self.params.encode()
+			return self.params.asURL()
 		else:
 			return body
 
@@ -206,7 +207,6 @@ class Transaction:
 
 		@session			Enclosing session
 		@request			Initiating request
-		@response			Response to the request (None by default)
 		@data				Response data
 		@cookies			Response cookies
 		@redirect			Transaction for the redirection (None by default)
@@ -215,64 +215,56 @@ class Transaction:
 	"""
 
 	def __init__( self, session, request ):
-		self.session  = session
-		self.request  = request
-		self.response = None 
-		self.data     = None
-		self.cookies  = Parameters()
-		self.status   = None
-		self.redirect = None
-		self.done     = False
+		self._curl     = curl.Transaction(self)
+		self._session  = session
+		self._request  = request
+		self._cookies  = Pairs()
 	
+	def session( self ):
+		"""Returns this transaction session"""
+		return self._session
+
+	def request( self ):
+		"""Returns this transaction request"""
+		return self._request
+
+	def cookies( self ):
+		"""Returns this transaction cookies (including the new cookies, if the
+		transaction is set to merge cookies)"""
+		pass
+
+	def data( self ):
+		"""Returns the response data (implies that the transaction was
+		previously done)"""
+		return self._transaction._data
+
+	def redirect( self ):
+		"""Returns the URL to which the response redirected, if any."""
+		return self._transaction.redirect()
+
+	def newCookies( self ):
+		"""Returns the list of new cookies."""
+		return Pairs()
+
 	def do( self, mergeCookies=True ):
+		# We do not do a transaction twice
 		if self.done: return
-		# OLD HTTPLIB
-		# ==================================
+		
 		# We prepare the headers
 		headers = self.request.headers() 
-		headers["Connection"] = "close"
+
 		# We send the request
-		connection = self.session.protocol(self.session.host)
+		if self.request.method() == GET:
+			self.GET()
+		elif self.request.method() == POST:
+			self.POST()
+		else:
+			raise Exception("Unsupported method:", self.request.method())
+
 		connection.request(self.request.method(), self.request.url(),
 		self.request.body(), headers )
-		print self.request.method(), self.request.url()
-		# And get the response
-		self.response = connection.getresponse()
-		self.status   = self.response.status
-		try:
-			self.data  = self.response.read()
-		except httplib.IncompleteRead, e:
-			raise e
-		print "REQ", self.request.url()
-		print "REQ", self.request.headers()
-		print "REQ", self.request.body()
-		print "REPONSE", self.status
-		print "REPONSE", self.response.msg
-		# ==================================
-		
-		# full_url = self.session._absoluteURL(self.request.url())
-		# print "Doing", self
-		# request = urllib2.Request( full_url, self.request.body(), self.request.headers())
-		# print "REQ ",  full_url
-		# self.response = urllib2.urlopen(request)
-		# self.data     = self.response.read()
-		# print "RES ", self.response.url
-		# print "DATA", len(self.data)
-# 
-		redirect_url = None
-		# We parse the response headers (for cookies)
-		for header in self.response.msg.headers:
-			match = RE_HEADER.match(header)
-			if not match: continue
-			header, value = match.group(1), match.group(2)
-			if header.lower().strip() == "set-cookie":
-				name, cookie_value = RE_COOKIE.match(value).group(1).split("=", 1)
-				self.cookies.add(name, urllib.unquote(cookie_value))
-			elif header.lower().strip() == "location":
-				redirect_url = value
+	
 
-		print "REDIRECT", redirect_url
-		print
 		# We merge the cookies if necessary
 		if mergeCookies:
 			self.session.cookies.merge(self.cookies)
@@ -316,7 +308,7 @@ class Session:
 		self.host            = None
 		self.protocol        = HTTP
 		self.transactions    = []
-		self.cookies         = Parameters()
+		self.cookies         = Pairs()
 		self.userAgent       = "Mozilla/5.0 (X11; U; Linux i686; fr; rv:1.8.0.4) Gecko/20060608 Ubuntu/dapper-security"
 		self.maxTransactions = self.MAX_TRANSACTIONS
 		if url: self.get(url)
