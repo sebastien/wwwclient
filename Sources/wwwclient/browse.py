@@ -394,7 +394,6 @@ class Session:
 			if not url.startswith("http"): url = "http://" + url
 		# And now we parse the url and update the session attributes
 		protocol, host, path, parameters, query, fragment =  urlparse.urlparse(url)
-		print urlparse.urlparse(url)
 		if   protocol == "http": self._protocol  = HTTP
 		elif protocol == "https": self._protocol = HTTPS
 		if host: self._host =  host
@@ -407,7 +406,6 @@ class Session:
 		if parameters:  url += ";" + parameters
 		if query:       url += "?" + query
 		if fragment:    url += "#" + fragment
-		print "URL", old_url, " ==> ", url
 		return url
 
 	def _createRequest( self, **kwargs ):

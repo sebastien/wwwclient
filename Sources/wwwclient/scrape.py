@@ -14,10 +14,11 @@ import re
 RE_SPACES    = re.compile("\s+")
 RE_FORMDATA  = re.compile("<(form|input)", re.I)
 RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
-RE_HTMLEND   = re.compile(">")
+RE_HTMLEND   = re.compile("/?>")
 
 HTML_OPEN    = 0
 HTML_CLOSE   = 1
+HTML_SINGLE  = 2
 
 # -----------------------------------------------------------------------------
 #
@@ -108,10 +109,20 @@ class Form:
 #
 # -----------------------------------------------------------------------------
 
+LEVEL  = 0
+TYPE   = 1
+NAME   = 2
+START  = 3
+END    = 4
+ASTART = 5
+AEND   = 6
+
 class HTML:
 	"""This class contains a set of tools to process HTML text data easily. This
 	class can operate on a full HTML document, or on any subset of the
 	document."""
+
+	LEVEL_ACCOUNT = [ "html", "head", "body", "div", "tr", "td" ]
 
 	@staticmethod
 	def nextTag( html, offset=0 ):
@@ -123,12 +134,18 @@ class HTML:
 		if n == None:
 			return HTML.nextTag(html, m.end())
 		if m.group()[1] == "/": tag_type = HTML_CLOSE
+		elif n.group()[0] == "/": tag_type = HTML_SINGLE
 		else: tag_type = HTML_OPEN
 		return (tag_type, m.group(1), m.start(), m.end(), n.start()), n.end()
 
 	@staticmethod
 	def iterate( html ):
+		"""Iterates on the html document and yields a string for text content or
+		a tuple (level, type, name, start, attrstart, attrend) corresponding to
+		the tag level (number of parents), tag type (HTML_OPEN or HTML_CLOSE),
+		tag start and end offsets, attributes start and end offsets."""
 		offset = 0
+		level  = 0
 		end    = False
 		while not end:
 			tag = HTML.nextTag(html, offset)
@@ -138,12 +155,68 @@ class HTML:
 			else:
 				tag, tag_end_offset = tag
 				tag_type, tag_name, tag_start, attr_start, attr_end = tag
+				# We increment the level if necessary
+				if tag_name.lower()  in HTML.LEVEL_ACCOUNT:
+					if tag_type == HTML_OPEN:  level += 1
 				if tag_start > offset: yield html[offset:tag_start]
-				yield tag
+				yield level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
+				# And decrement it if necessary
+				if tag_name.lower()  in HTML.LEVEL_ACCOUNT:
+					if tag_type == HTML_CLOSE: level -= 1
 				offset = tag_end_offset
 
 	@staticmethod
-	def textOnly( data ):
+	def cut( html, level=None, strip=None, contentOnly=False, tags=None ):
+		"""Cuts the given html according to the given tag. For instance, cutting
+		an html document according to divs will return a list of blocks of text
+		beginning and ending with divs (excepted the leading and trailing
+		blocks)."""
+		off       = 0
+		cut_level = level
+		for tag in HTML.iterate(html):
+			if not type(tag) in (tuple, list): continue
+			if tags != None and not tag[NAME].lower() in tags: continue
+			if cut_level != None and tag[LEVEL] != cut_level: continue
+			if cut_level == None: cut_level = tag[LEVEL]
+			if tag[TYPE] == HTML_OPEN:
+				if contentOnly: cut_off = tag[END]
+				else: cut_off = tag[START]
+			else:
+				if contentOnly: cut_off = tag[START]
+				else: cut_off = tag[END]
+			if strip and tag[TYPE] == HTML_OPEN:
+				pass
+			else:
+				yield html[off:cut_off]
+			off = cut_off
+		if not strip:
+			yield html[off:]
+
+	@staticmethod
+	def levelof( html, tags ):
+		"""Return the level where first one of the given tags is
+		encountered."""
+		if type(tags) in (str, unicode): tag = (tags,)
+		for tag in HTML.iterate(html):
+			if not type(tag) in (tuple, list): continue
+			if tag[NAME].lower() in tags: return tag[LEVEL]
+		return None
+
+	@staticmethod
+	def levels( html, tags ):
+		"""Return the levels at which the given tags can be
+		encountered."""
+		if type(tags) in (str, unicode): tag = (tags,)
+		levels = []
+		for tag in HTML.iterate(html):
+			if not type(tag) in (tuple, list): continue
+			if tag[NAME].lower() in tags and tag[LEVEL] not in levels:
+				levels.append(tag[LEVEL])
+		levels.sort()
+		return levels
+
+	@staticmethod
+	def text( data ):
 		"""Strips the text or list (resulting from an HTML.iterate) from HTML
 		tags, so that only the text remains."""
 		if type(data) in (tuple, list):
