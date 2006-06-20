@@ -56,15 +56,7 @@ class Form:
 	def fill( self, **values ):
 		field_names = map(lambda f:f.get("name"), self.fields())
 		for name, value in values.items():
-			if not name in field_names:
-				raise FormException("Unexpected value: %s=%s" % (name, value))
-			else:
-				self.values[name] = value
-	
-	def submit( self, action, **values ):
-		self.prefill()
-		self.fill(**values)
-		# TODO: Continue implementation
+			self.values[name] = value
 
 	def parameters( self ):
 		"""Returns a list of (key,value) respecting the original input order."""
@@ -82,6 +74,23 @@ class Form:
 			if key not in names:
 				res.append((key, value))
 		return res
+
+	def submit( self, action=None, **values ):
+		"""Submits this form with the given action and given values."""
+		self.fill(**values)
+		parameters  = []
+		field_names = self.fields(namesOnly=True)
+		# We fill values that were initialized
+		for key in field_names:
+			value = self.values.get(key)
+			if self.values.has_key(key):
+				parameters.append((key, value))
+		# And add values that do not correspond to any field
+		for key, value in values.items():
+			if key not in field_names:
+				parameters.append((key, value))
+		# if action: parameters.append((action, self.values.get(action)))
+		return parameters
 
 	def _prefill( self ):
 		"""Sets the default values for this form."""
@@ -146,25 +155,37 @@ class HTML:
 	def parseAttributes(text, attribs = None):
 		if attribs == None: attribs = {}
 		eq = text.find("=")
-		if eq == -1: return attribs
-		sep = text[eq+1]
-		if   sep == "'": end = text.find( "'", eq + 2 )
-		elif sep == '"': end = text.find( '"', eq + 2 )
-		else: end = text.find(" ", eq)
-		# Did we reach the end ?
-		name = text[:eq]
-		if end == -1:
-			value = text[eq+1:]
-			if value and value[0] in ("'", '"'): value = value[1:-1]
-			else: value = value.strip()
-			attribs[name.lower()] = value
-			return attribs
+		# There may be attributes without a trailing =
+		# Like  ''id=all type=radio name=meta value="" checked''
+		if eq == -1:
+			space = text.find(" ")
+			if space == -1:
+				name = text.strip()
+				if name: attribs[name] = None
+				return attribs
+			else:
+				name = text[:space].strip()
+				if name: attribs[name] = None
+				return parseAttributes(text[space+1:], attribs)
 		else:
-			value = text[eq+1:end+1]
-			if value[0] in ("'", '"'): value = value[1:-1]
-			else: value = value.strip()
-			attribs[name.lower()] = value
-			return HTML.parseAttributes(text[end+1:].strip(), attribs)
+			sep = text[eq+1]
+			if   sep == "'": end = text.find( "'", eq + 2 )
+			elif sep == '"': end = text.find( '"', eq + 2 )
+			else: end = text.find(" ", eq)
+			# Did we reach the end ?
+			name = text[:eq]
+			if end == -1:
+				value = text[eq+1:]
+				if value and value[0] in ("'", '"'): value = value[1:-1]
+				else: value = value.strip()
+				attribs[name.lower()] = value
+				return attribs
+			else:
+				value = text[eq+1:end+1]
+				if value[0] in ("'", '"'): value = value[1:-1]
+				else: value = value.strip()
+				attribs[name.lower()] = value
+				return HTML.parseAttributes(text[end+1:].strip(), attribs)
 
 # -----------------------------------------------------------------------------
 #

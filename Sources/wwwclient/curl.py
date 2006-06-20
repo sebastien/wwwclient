@@ -45,15 +45,20 @@ Example:
 	print t.info()
 
 """
-RE_CONTENT_LENGTH = re.compile("Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
-RE_LOCATION       = re.compile("Location\s*:(.*)\r\n", re.I|re.MULTILINE)
-RE_SET_COOKIE     = re.compile("Set-Cookie\s*:(.*)\r\n", re.I|re.MULTILINE)
-RE_CHUNKED        = re.compile("Transfer-Encoding\s*:\s*chunked\s*\r\n", re.I|re.MULTILINE)
-CRLF              = "\r\n"
+
+FILE_ATTACHMENT    = 0
+CONTENT_ATTACHMENT = 1
+
+RE_CONTENT_LENGTH  = re.compile("Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
+RE_LOCATION        = re.compile("Location\s*:(.*)\r\n", re.I|re.MULTILINE)
+RE_SET_COOKIE      = re.compile("Set-Cookie\s*:(.*)\r\n", re.I|re.MULTILINE)
+RE_CHUNKED         = re.compile("Transfer-Encoding\s*:\s*chunked\s*\r\n", re.I|re.MULTILINE)
+CRLF               = "\r\n"
+
 
 # NOTE: A useful reference for understanding HTTP is the following website
 # <http://www.jmarshall.com/easy/http>
-class Transaction:
+class HTTPClient:
 	"""Sends and manages HTTP requests using the PyCURL library. Each instance
 	should be used in a single thread (no sharing), because the same Curl
 	instance is kept by all methods."""
@@ -68,6 +73,7 @@ class Transaction:
 		self._redirect   = None
 		self._newCookies = None
 		self._responses  = None
+		self.verbose     = False
 
 	def url( self ):
 		"""Returns the last URL processed by this Curl HTTP interface."""
@@ -118,14 +124,43 @@ class Transaction:
 		))
 
 	def GET( self, url, headers=None, follow=False ):
+		"""Gets the given URL, setting the given headers (as a list of strings),
+		and optionnaly following redirects (false by default)."""
 		r, s = self._prepareRequest( url, headers )
 		self._performRequest()
 		if follow and self.redirect(): self.follow()
 		return self.data()
 
-	def POST( self, url, data, headers=None, follow=False ):
+	def POST( self, url, data=None, fields=None, attach=None, headers=None, follow=False ):
+		"""Posts the given data (as urlencoded string), or fields as list of
+		(name, value) pairs and/or attachments as list of (name, value, type)
+		triples. Headers and follow attributes are the same as for the @GET
+		method."""
 		r, s = self._prepareRequest( url, headers )
-		r.setopt(pycurl.POSTFIELDS, DATA)
+		# PyCurl offers three ways to do a post
+		r.setopt(pycurl.POST, 1)
+		if data != None:
+			assert fields == None, "Fields must be None when data is provided"
+			assert not attach, "No attachment is allowed when data is provided"
+			r.setopt(pycurl.POSTFIELDS, data)
+		elif attach or fields:
+			# TODO: Handle multiple files
+			# TODO: Assert no field override
+			field_data = []
+			if fields:
+				field_data.extend(fields)
+			if attach:
+				for name, value, atype in attach:
+					if atype == FILE_ATTACHMENT:
+						field_data.append((name, (pycurl.FORM_FILE, value)))
+					elif atype == CONTENT_ATTACHMENT:
+						field_data.append((name, (pycurl.FORM_CONTENT, value)))
+					else:
+						raise Exception("Unknown attachment type: %s" % (atype))
+			r.setopt(pycurl.HTTPPOST, field_data)
+		else:
+			raise Exception("Post with no data")
+		# Now we can perform the request
 		self._performRequest()
 		if follow and self.redirect(): self.follow()
 		return self.data()
@@ -164,7 +199,7 @@ class Transaction:
 		self._parseResponse()
 		self._curl.close()
 		self._curl = None
-		print self.info(),"\n"
+		if self.verbose: print self.info(), "\n"
 
 	def _parseResponse( self ):
 		"""Parse the message, and return a list of responses and headers. This
@@ -203,7 +238,19 @@ class Transaction:
 			location, cookies = self._parseStatefulHeaders(headers)
 			self._redirect   = location
 			self._newCookies.extend(self._parseCookies(cookies))
-			res.append([first_line, headers, body])
+			# FIXME: I don't know if it works properly, but at # least it handles
+			# responses from <http://www.contactor.se/~dast/postit.cgi> properly.
+			if first_line:
+				# If the first line does not start with HTTP, then this may be
+				# the rest of the body from a previous response
+				if not first_line.startswith("HTTP"):
+					if not res: continue
+					res[-1][-1] = res[-1][-1] + CRLF + CRLF + first_line
+					if headers: res[-1][-1] = res[-1][-1] + headers
+					if body: res[-1][-1] = res[-1][-1] + body 
+				# Otherwise we have new response
+				else:
+					res.append([first_line, headers, body])
 		self._responses = res
 		return res
 	
@@ -238,5 +285,12 @@ class Transaction:
 			if not name: continue
 			res.append((name,value))
 		return res
+
+if __name__ == "__main__":
+	import os
+	# Tests the post
+	t = Transaction()
+	t.POST('http://www.contactor.se/~dast/postit.cgi',
+	attach=[("myfile", os.path.abspath(__file__), FILE_ATTACHMENT)])
 
 # EOF

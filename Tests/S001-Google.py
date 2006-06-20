@@ -8,11 +8,12 @@ from wwwclient import browse, scrape
 
 scraper = scrape.Scraper()
 session = browse.Session()
+session.verbose = True
 session.get("www.google.com/")
 
-search_form = scraper.forms(session.last().data).values()[0]
+search_form = scraper.forms(session.last().data()).values()[0]
 session.submit( search_form, values={"q":"Britney Spears"}, action="btnG",
-method=browse.GET ).data
-print scrape.HTML.textOnly(session.last().data)
+method=browse.GET ).data()
+scrape.HTML.textOnly(session.last().data())
 
 # EOF
