@@ -6,15 +6,19 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 19-Jun-2006
-# Last mod  : 19-Jun-2006
+# Last mod  : 22-Jun-2006
 # -----------------------------------------------------------------------------
 
-import re
+import re, htmlentitydefs
 
 RE_SPACES    = re.compile("\s+")
 RE_FORMDATA  = re.compile("<(form|input)", re.I)
 RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
+
+RE_HTMLCLASS = re.compile("class\s*=\s*['\"]?([\w\-_\d]+)", re.I)
+RE_HTMLID    = re.compile("id\s*=\s*['\"]?([\w\-_\d]+)", re.I)
+RE_HTMLHREF  = re.compile("href\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
 
 HTML_OPEN    = 0
 HTML_CLOSE   = 1
@@ -117,63 +121,109 @@ END    = 4
 ASTART = 5
 AEND   = 6
 
-class HTML:
+class HTMLTools:
 	"""This class contains a set of tools to process HTML text data easily. This
 	class can operate on a full HTML document, or on any subset of the
 	document."""
 
-	LEVEL_ACCOUNT = [ "html", "head", "body", "div", "tr", "td" ]
+	def __init__( self ):
+		self.LEVEL_ACCOUNT = [ "html", "head", "body", "div", "table", "tr", "td" ]
 
-	@staticmethod
-	def nextTag( html, offset=0 ):
+	def nextTag( self, html, offset=0 ):
+		"""Finds the next tag in the given HTML text from the given offset. This
+		returns (tag type, tag name, tag start, attributes start, attributes
+		end) and tag end or None."""
 		if offset >= len(html) - 1: return None
 		m = RE_HTMLSTART.search(html, offset)
 		if m == None:
 			return None
 		n = RE_HTMLEND.search(html, m.end())
 		if n == None:
-			return HTML.nextTag(html, m.end())
+			return self.nextTag(html, m.end())
 		if m.group()[1] == "/": tag_type = HTML_CLOSE
 		elif n.group()[0] == "/": tag_type = HTML_SINGLE
 		else: tag_type = HTML_OPEN
 		return (tag_type, m.group(1), m.start(), m.end(), n.start()), n.end()
 
-	@staticmethod
-	def iterate( html ):
+	def iterate( self, html, write=None, closeOn=() ):
 		"""Iterates on the html document and yields a string for text content or
 		a tuple (level, type, name, start, attrstart, attrend) corresponding to
 		the tag level (number of parents), tag type (HTML_OPEN or HTML_CLOSE),
 		tag start and end offsets, attributes start and end offsets."""
-		offset = 0
-		level  = 0
-		end    = False
+		offset   = 0
+		level    = 0 
+		end      = False
+		last     = None
+		parents  = []
+		sequence = []
+		if closeOn: closeOn = list(closeOn)
+		keep_sequence = closeOn and len(closeOn) or 0
 		while not end:
-			tag = HTML.nextTag(html, offset)
+			tag = self.nextTag(html, offset)
 			if tag == None:
 				yield html[offset:]
 				end = True
 			else:
 				tag, tag_end_offset = tag
 				tag_type, tag_name, tag_start, attr_start, attr_end = tag
-				# We increment the level if necessary
-				if tag_name.lower()  in HTML.LEVEL_ACCOUNT:
-					if tag_type == HTML_OPEN:  level += 1
+				tag_name_lower      = tag_name.lower()
+				# We update the keep sequence, which is the sequence of last tag
+				# names
+				if keep_sequence:
+					while len(sequence) > keep_sequence -1: sequence = sequence[1:]
+					sequence.append(tag_name_lower)
+				# There may be text inbetween
 				if tag_start > offset: yield html[offset:tag_start]
-				yield level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
-				# And decrement it if necessary
-				if tag_name.lower()  in HTML.LEVEL_ACCOUNT:
-					if tag_type == HTML_CLOSE: level -= 1
+				# We decrement the level if necessary
+				if tag_name_lower in self.LEVEL_ACCOUNT and tag_type == HTML_CLOSE:
+					if tag_name_lower in parents:
+						while parents[-1] != tag_name_lower:
+							level -= 1
+							parents.pop()
+						level -= 1
+						parents.pop()
+
+				# We process the encountered tag
+				new  = level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
+				# We may want to write the found tag to the write stream
+				if write != None:
+					# We skip closing tags when writing
+					if last and new and last[1] == HTML_OPEN \
+					and new[1] == HTML_CLOSE and last[0] == new[0] \
+					and last[2] == new[2]:
+						pass
+					else:
+						tag_class = RE_HTMLCLASS.search(html[attr_start:attr_end])
+						tag_id    = RE_HTMLID.search(html[attr_start:attr_end])
+						tag_href  = RE_HTMLHREF.search(html[attr_start:attr_end])
+						meta      = []
+						if tag_id:    meta.append("#" + tag_id.group(1))
+						if tag_class: meta.append("." + tag_class.group(1))
+						if tag_href:  meta.append("<" + tag_href.group(1) + ">")
+						meta = ", ".join(meta)
+						if meta: meta = ": " + meta
+						write.write("%-3d %s%s%s\n" % (level, "| " * level, tag_name, meta))
+				yield new
+				last = new
+				# We may close the parent if we are in a closeOn section
+				if sequence == closeOn:
+					level -= 1
+					parents.pop()
+				# We increment the level if necessary
+				if tag_name_lower in self.LEVEL_ACCOUNT:
+					if tag_type == HTML_OPEN:
+						parents.append(tag_name_lower)
+						level += 1
 				offset = tag_end_offset
 
-	@staticmethod
-	def cut( html, level=None, strip=None, contentOnly=False, tags=None ):
+	def cut( self, html, level=None, strip=None, contentOnly=False, tags=None ):
 		"""Cuts the given html according to the given tag. For instance, cutting
 		an html document according to divs will return a list of blocks of text
 		beginning and ending with divs (excepted the leading and trailing
 		blocks)."""
 		off       = 0
 		cut_level = level
-		for tag in HTML.iterate(html):
+		for tag in self.iterate(html):
 			if not type(tag) in (tuple, list): continue
 			if tags != None and not tag[NAME].lower() in tags: continue
 			if cut_level != None and tag[LEVEL] != cut_level: continue
@@ -192,73 +242,85 @@ class HTML:
 		if not strip:
 			yield html[off:]
 
-	@staticmethod
-	def levelof( html, tags ):
+	def levelof( self, html, tags ):
 		"""Return the level where first one of the given tags is
 		encountered."""
 		if type(tags) in (str, unicode): tag = (tags,)
-		for tag in HTML.iterate(html):
+		for tag in self.iterate(html):
 			if not type(tag) in (tuple, list): continue
 			if tag[NAME].lower() in tags: return tag[LEVEL]
 		return None
 
-	@staticmethod
-	def levels( html, tags ):
+	def levels( self, html, tags ):
 		"""Return the levels at which the given tags can be
 		encountered."""
 		if type(tags) in (str, unicode): tag = (tags,)
 		levels = []
-		for tag in HTML.iterate(html):
+		for tag in self.iterate(html):
 			if not type(tag) in (tuple, list): continue
 			if tag[NAME].lower() in tags and tag[LEVEL] not in levels:
 				levels.append(tag[LEVEL])
 		levels.sort()
 		return levels
 
-	@staticmethod
-	def text( data ):
-		"""Strips the text or list (resulting from an HTML.iterate) from HTML
+	def text( self, data ):
+		"""Strips the text or list (resulting from an @iterate) from HTML
 		tags, so that only the text remains."""
 		if type(data) in (tuple, list):
 			return "".join([text for text in data if type(text) not in (list,tuple)])
 		else:
-			return "".join([text for text in HTML.iterate(data) if type(text) not in (list, tuple)])
+			return "".join([text for text in self.iterate(data) if type(text) not in (list, tuple)])
+	
+	def expand( self, text ):
+		"""Expands the entities found in the given text."""
+		# NOTE: This is based on
+		# <http://www.shearersoftware.com/software/developers/htmlfilter/>
+		entityStart = text.find('&')
+		if entityStart != -1:   # only run bulk of code if there are entities present
+			preferUnicodeToISO8859 = 1 #(outputEncoding is not 'iso-8859-1')
+			prevOffset = 0
+			textParts = []
+			while entityStart != -1:
+			
+				textParts.append(text[prevOffset:entityStart])
+				entityEnd = text.find(';', entityStart+1)
+				
+				if entityEnd == -1:
+					entityEnd = entityStart
+					entity = '&'
+				else:
+					entity = text[entityStart:entityEnd+1]
+					if len(entity) < 4 or entity[1] != '#':
+						entity = htmlentitydefs.entitydefs.get(entity[1:-1],entity)
+					if len(entity) == 1:
+						if preferUnicodeToISO8859 and ord(entity) > 127 and hasattr(entity, 'decode'):
+							entity = entity.decode('iso-8859-1')
+					else:
+						if len(entity) >= 4 and entity[1] == '#':
+							if entity[2] in ('X','x'):
+								entityCode = int(entity[3:-1], 16)
+							else:
+								entityCode = int(entity[2:-1])
+							if entityCode > 255:
+								entity = unichr(entityCode)
+							else:
+								entity = chr(entityCode)
+								if preferUnicodeToISO8859 and hasattr(entity, 'decode'):
+									entity = entity.decode('iso-8859-1')
+					textParts.append(entity)
+				prevOffset = entityEnd+1
+				entityStart = text.find('&', prevOffset)
+			textParts.append(text[prevOffset:])
+			text = ''.join(textParts)
+		return text
 
-	@staticmethod
-	def parseAttributes(text, attribs = None):
-		if attribs == None: attribs = {}
-		eq = text.find("=")
-		# There may be attributes without a trailing =
-		# Like  ''id=all type=radio name=meta value="" checked''
-		if eq == -1:
-			space = text.find(" ")
-			if space == -1:
-				name = text.strip()
-				if name: attribs[name] = None
-				return attribs
-			else:
-				name = text[:space].strip()
-				if name: attribs[name] = None
-				return parseAttributes(text[space+1:], attribs)
-		else:
-			sep = text[eq+1]
-			if   sep == "'": end = text.find( "'", eq + 2 )
-			elif sep == '"': end = text.find( '"', eq + 2 )
-			else: end = text.find(" ", eq)
-			# Did we reach the end ?
-			name = text[:eq]
-			if end == -1:
-				value = text[eq+1:]
-				if value and value[0] in ("'", '"'): value = value[1:-1]
-				else: value = value.strip()
-				attribs[name.lower()] = value
-				return attribs
-			else:
-				value = text[eq+1:end+1]
-				if value[0] in ("'", '"'): value = value[1:-1]
-				else: value = value.strip()
-				attribs[name.lower()] = value
-				return HTML.parseAttributes(text[end+1:].strip(), attribs)
+# We create a shared instance with the scraping tools
+HTML = HTMLTools()
+
+def do( f, *args, **kwargs ):
+	"""This function is useful to "do" iterator functions which are only run if
+	put within a loop or tuple/list function."""
+	return tuple(f(*args, **kwargs))
 
 # -----------------------------------------------------------------------------
 #
@@ -291,7 +353,7 @@ class Scraper:
 		for match in matches:
 			tag_end    = html.find(">", match.end())
 			name       = match.group(1).lower()
-			attributes = HTML.parseAttributes(html[match.end():tag_end].strip())
+			attributes = Scraper.parseHTMLAttributes(html[match.end():tag_end].strip())
 			if name == "form":
 				form_name = attributes.get("name")
 				if not form_name:
@@ -312,4 +374,39 @@ class Scraper:
 		for form in forms.values(): form._prefill()
 		return forms
 
+	@staticmethod
+	def parseHTMLAttributes(text, attribs = None):
+		if attribs == None: attribs = {}
+		eq = text.find("=")
+		# There may be attributes without a trailing =
+		# Like  ''id=all type=radio name=meta value="" checked''
+		if eq == -1:
+			space = text.find(" ")
+			if space == -1:
+				name = text.strip()
+				if name: attribs[name] = None
+				return attribs
+			else:
+				name = text[:space].strip()
+				if name: attribs[name] = None
+				return Scraper.parseHTMLAttributes(text[space+1:], attribs)
+		else:
+			sep = text[eq+1]
+			if   sep == "'": end = text.find( "'", eq + 2 )
+			elif sep == '"': end = text.find( '"', eq + 2 )
+			else: end = text.find(" ", eq)
+			# Did we reach the end ?
+			name = text[:eq]
+			if end == -1:
+				value = text[eq+1:]
+				if value and value[0] in ("'", '"'): value = value[1:-1]
+				else: value = value.strip()
+				attribs[name.lower()] = value
+				return attribs
+			else:
+				value = text[eq+1:end+1]
+				if value[0] in ("'", '"'): value = value[1:-1]
+				else: value = value.strip()
+				attribs[name.lower()] = value
+				return Scraper.parseHTMLAttributes(text[end+1:].strip(), attribs)
 # EOF

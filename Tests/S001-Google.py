@@ -14,6 +14,9 @@ session.get("www.google.com/")
 search_form = scraper.forms(session.last().data()).values()[0]
 session.submit( search_form, values={"q":"Britney Spears"}, action="btnG",
 method=browse.GET ).data()
-scrape.HTML.textOnly(session.last().data())
 
+# Google results are not properly closed, so we had to identify patterns where
+# there were  a closing tag should be inserted
+close_on = ("td", "a", "img", "br", "a")
+scrape.do(scrape.HTML.iterate, session.last().data(), closeOn=close_on, write=sys.stdout)
 # EOF

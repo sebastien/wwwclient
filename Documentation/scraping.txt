@@ -1,0 +1,44 @@
+== WWWClient
+-- Scraping How-To
+-- Author: Sébastien Pierre
+
+Operations
+==========
+
+iterate::
+
+    Objective:: iterates over the tags found in an HTML document
+
+    - Have a list of tags and their level within the document
+    - Filter some parts of the HTML document
+    - Find boundaries of a particular segment
+
+Closing on sequences:
+
+    --
+    >> scrape.do(scrape.HTML.iterate, html, write=sys.stdout)
+
+    9   | | | | | | | | | td
+    10  | | | | | | | | | | a: </search?q=Britney+Spears&hl=en&lr=&cr=countryCA&ie=UTF-8&start=10&sa=N>
+    10  | | | | | | | | | | img
+    10  | | | | | | | | | | br
+    10  | | | | | | | | | | a
+    10  | | | | | | | | | | td
+    11  | | | | | | | | | | | a: </search?q=Britney+Spears&hl=en&lr=&cr=countryCA&ie=UTF-8&start=20&sa=N>
+    11  | | | | | | | | | | | img
+    11  | | | | | | | | | | | br
+    11  | | | | | | | | | | | a
+    11  | | | | | | | | | | | td
+    12  | | | | | | | | | | | | a: </search?q=Britney+Spears&hl=en&lr=&cr=countryCA&ie=UTF-8&start=30&sa=N>
+    12  | | | | | | | | | | | | img
+    12  | | | | | | | | | | | | br
+    12  | | | | | | | | | | | | a
+    --
+
+    --
+    close_on = ("td", "a", "img", "br")
+    >> scrape.do(scrape.HTML.iterate, html, write=sys.stdout, closeOn=close_on)
+
+
+
+# vim: fileencoding=latin1 ts=4 sw=4 et 

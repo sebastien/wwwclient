@@ -14,7 +14,6 @@
 import urlparse, urllib, mimetypes, re
 import curl
 
-
 __version__ = "2.0"
 
 HTTP               = "http"
@@ -29,7 +28,6 @@ METHODS            = (GET, POST, HEAD)
 FILE_ATTACHMENT    = curl.FILE_ATTACHMENT
 CONTENT_ATTACHMENT = curl.CONTENT_ATTACHMENT
 
-DEFAULT_MIME       = "text/plain"
 # -----------------------------------------------------------------------------
 #
 # PARAMETERS
