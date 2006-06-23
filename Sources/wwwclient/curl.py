@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 20-Jun-2006
-# Last mod  : 20-Jun-2006
+# Last mod  : 22-Jun-2006
 # -----------------------------------------------------------------------------
 
 import pycurl, re, urlparse, StringIO
@@ -50,11 +50,12 @@ FILE_ATTACHMENT    = 0
 CONTENT_ATTACHMENT = 1
 
 RE_CONTENT_LENGTH  = re.compile("Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
-RE_LOCATION        = re.compile("Location\s*:(.*)\r\n", re.I|re.MULTILINE)
-RE_SET_COOKIE      = re.compile("Set-Cookie\s*:(.*)\r\n", re.I|re.MULTILINE)
+RE_CONTENT_TYPE    = re.compile("Content-Type\s*:\s*([0-9]+)",   re.I|re.MULTILINE)
+RE_CHARSET         = re.compile("charset=([\w\d_-]+)",           re.I|re.MULTILINE)
+RE_LOCATION        = re.compile("Location\s*:(.*)\r\n",          re.I|re.MULTILINE)
+RE_SET_COOKIE      = re.compile("Set-Cookie\s*:(.*)\r\n",        re.I|re.MULTILINE)
 RE_CHUNKED         = re.compile("Transfer-Encoding\s*:\s*chunked\s*\r\n", re.I|re.MULTILINE)
 CRLF               = "\r\n"
-
 
 # NOTE: A useful reference for understanding HTTP is the following website
 # <http://www.jmarshall.com/easy/http>
@@ -63,7 +64,7 @@ class HTTPClient:
 	should be used in a single thread (no sharing), because the same Curl
 	instance is kept by all methods."""
 
-	def __init__( self ):
+	def __init__( self, encoding="latin-1" ):
 		self._curl       = None
 		self._buffer     = None
 		self._url        = None
@@ -74,6 +75,7 @@ class HTTPClient:
 		self._newCookies = None
 		self._responses  = None
 		self.verbose     = False
+		self.encoding    = encoding
 
 	def url( self ):
 		"""Returns the last URL processed by this Curl HTTP interface."""
@@ -168,11 +170,12 @@ class HTTPClient:
 	def _absoluteURL( self, url ):
 		"""Returns the absolute URL for the given url"""
 		if self.host() == None or url == None or url.find("://") != -1:
-			return url
-		if url[0] == "/":
-			return "%s://%s%s" % (self.protocol(), self.host(), url)
+			res = url
+		elif url[0] == "/":
+			res = "%s://%s%s" % (self.protocol(), self.host(), url)
 		else:
-			return "%s://%s/%s" % (self.protocol(), self.host(), url)
+			res = "%s://%s/%s" % (self.protocol(), self.host(), url)
+		return str(url)
 
 	def _prepareRequest( self, url, headers = None ):
 		"""Returns a pair (request, stringio) corresponding to an HTTP request
@@ -217,8 +220,13 @@ class HTTPClient:
 			if eoh == -1: eoh = len(message)
 			first_line     = message[off:eol]
 			headers        = message[eol+2:eoh]
+			charset        = RE_CHARSET.search(headers)
 			is_chunked     = RE_CHUNKED.search(headers)
 			content_length = RE_CONTENT_LENGTH.search(headers)
+			if charset:
+				encoding   = charset.group(1)
+			else:
+				encoding   = self.encoding
 			# If there is a content-length specified, we use it
 			if content_length:
 				content_length = int(content_length.group(1))
@@ -230,7 +238,7 @@ class HTTPClient:
 				# CRLF + CRLF only (this is what google.com returns)
 				off        = message.find(CRLF + CRLF, eoh + 4)
 				if off == -1: off = len(message) 
-				body       = message[eoh+4:off]
+				body       = message[eoh+4:off].decode(encoding)
 			# Or there is simply no body
 			else:
 				off        = eoh + 4

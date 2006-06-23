@@ -109,17 +109,20 @@ class Request:
 	"""The Request object encapsulates an HTTP request so that it is easy to
 	specify headers, cookies, data and attachments."""
 
-	def __init__( self, method=GET, url="/", params=None, data=None ):
+	def __init__( self, method=GET, url="/", params=None, headers=None, data=None ):
 		self._method     = method.upper()
 		self._url        = url
-		self._params      = Pairs(params)
-		self._cookies     = Pairs()
+		self._params     = Pairs(params)
+		self._cookies    = Pairs()
 		self._headers    = Pairs()
 		self._data       = data
 		self._attachments = []
 		# Ensures that the method is a proper one
 		if self._method not in METHODS:
 			raise Exception("Method not supported: %s" % (method))
+		if headers:
+			for h,v in headers.items():
+				self.header(h,v)
 
 	def method( self ):
 		"""Returns the method for this request"""
@@ -332,9 +335,9 @@ class Session:
 		if not self.last(): return None
 		else: return self.last().url()
 
-	def get( self, url="/", params=None, follow=True, do=True ):
+	def get( self, url="/", params=None, headers=None, follow=True, do=True ):
 		url         = self.__processURL(url)
-		request     = self._createRequest( url=url, params=params )
+		request     = self._createRequest( url=url, params=params, headers=headers )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		# We do the transaction
@@ -346,10 +349,10 @@ class Session:
 				transaction = self.get(transaction.redirect(), do=True)
 		return transaction
 
-	def post( self, url=None, params=None, data=None, follow=True, do=True ):
+	def post( self, url=None, params=None, data=None, headers=None, follow=True, do=True ):
 		url = self.__processURL(url)
 		request     = self._createRequest(
-			method=POST, url=url, params=params, data=data
+			method=POST, url=url, params=params, data=data, headers=headers
 		)
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
@@ -392,6 +395,7 @@ class Session:
 			if not url.startswith("http"): url = "http://" + url
 		# And now we parse the url and update the session attributes
 		protocol, host, path, parameters, query, fragment =  urlparse.urlparse(url)
+		# print url, urlparse.urlparse(url)
 		if   protocol == "http": self._protocol  = HTTP
 		elif protocol == "https": self._protocol = HTTPS
 		if host: self._host =  host

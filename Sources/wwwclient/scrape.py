@@ -9,20 +9,27 @@
 # Last mod  : 22-Jun-2006
 # -----------------------------------------------------------------------------
 
-import re, htmlentitydefs
+import re, string, htmlentitydefs
 
 RE_SPACES    = re.compile("\s+")
 RE_FORMDATA  = re.compile("<(form|input)", re.I)
 RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
+RE_HTMLLINK  = re.compile("<[^<]+href\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
 
 RE_HTMLCLASS = re.compile("class\s*=\s*['\"]?([\w\-_\d]+)", re.I)
 RE_HTMLID    = re.compile("id\s*=\s*['\"]?([\w\-_\d]+)", re.I)
 RE_HTMLHREF  = re.compile("href\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
 
-HTML_OPEN    = 0
-HTML_CLOSE   = 1
-HTML_SINGLE  = 2
+RE_SPACES    = re.compile("\s+", re.MULTILINE)
+
+HTML_OPEN    = "<tag>"
+HTML_CLOSE   = "</tag>"
+HTML_SINGLE  = "<tag />"
+
+KEEP_ABOVE    = "+"
+KEEP_SAME     = "="
+KEEP_BELOW    = "-"
 
 # -----------------------------------------------------------------------------
 #
@@ -109,6 +116,111 @@ class Form:
 
 # -----------------------------------------------------------------------------
 #
+# HTML TREE
+#
+# -----------------------------------------------------------------------------
+
+class Node:
+
+	TEXT = "#text"
+	ROOT = "#root"
+
+	def __init__( self, name="#text", attributes=None, parent=None,
+	children=None, text=None, html=None, indice=None ):
+		if attributes == None: attributes = {}
+		if children   == None: childrent  = []
+		self.name       = name
+		self.attributes = attributes
+		self.children   = children
+		self.parent     = parent
+		self.text       = text
+		self.indice     = indice
+
+	def append( self, child ):
+		if self.children == None: self.children = []
+		self.children.append(child)
+
+	def match( self, name=None, names=None, attributes={} ):
+		"""Matches the given name agains the given criteria"""
+		# We ensure the names
+		if name:
+			if not names: names = []
+			if type(names) != list: names = list(names)
+			names.append(name)
+		# We try to match the node name
+		if names and not self.name in names: return False
+		# We try to match for attributes
+		if attributes and not self.attributes: return False
+		for attr, val in attributes.items():
+			this_val = self.attributes.get(attr)
+			if val != None and this_val != val: return False
+		return True
+	
+	def filter( self, name=None, names=None, attributes={} ):
+		"""Iterates through the direct children that match the given
+		criteria."""
+		if self.children:
+			for c in self.children:
+				if c.match(name=name, names=names, attributes=attributes):
+					yield c
+
+	def html(self, norm=False):
+		if self.name == Node.TEXT:
+			return RE_SPACES.sub(" ",self.text)
+		if self.name == Node.ROOT:
+			return "".join((c.html() for c in self.children))
+		else:
+			html_attributes = []
+			if self.attributes:
+				for a,v in self.attributes.items():
+					if v == None:
+						html_attributes.append(a)
+					else:
+						if   v.find('"') == -1: v = '"%s"' % (v)
+						else: v = "'%s'" % (v)
+						html_attributes.append("%s=%s" % (a,v))
+			html_attributes = " ".join(html_attributes)
+			if not self.children:
+				return  "<%s %s/>" % (self.name, html_attributes)
+			else:
+				html_children   = "".join((c.html() for c in self.children))
+				return "<%s %s>%s</%s>" % (self.name, html_attributes,
+				html_children, self.name)
+	
+	def tags( self, name=None, names=None, attributes={} ):
+		"""Iterates through all the subset tags that match the given criteria."""
+		if self.match(name=name, names=names,attributes=attributes):
+			yield self
+		if self.children:
+			for c in self.children:
+				for r in c.tags(name=name, names=names, attributes=attributes):
+					yield r
+
+	def asString( self ):
+		if self.indice != None: prefix = "%-4d" % (self.indice)
+		else: prefix = ""
+		# If this is a text node
+		if self.name == Node.TEXT:
+			return prefix + "#text:" + repr(self.text)
+		# If this is a regular node
+		res = prefix
+		if self.attributes:
+			res += "%s: %s" % (self.name, " ".join(u"%s=%s" % (k,repr(v)) for k,v in self.attributes.items()))
+		else:
+			res += self.name
+		if self.children:
+			for c in self.children:
+				res += "\n"
+				for line in unicode(c.asString()).split("\n"):
+					res += line[:len(prefix)] + "| " + line[len(prefix):] + "\n"
+				res = res[:-1]
+		return res
+	
+	def __str__( self ):
+		return self.asString()
+
+# -----------------------------------------------------------------------------
+#
 # HTML PARSING FUNCTIONS
 #
 # -----------------------------------------------------------------------------
@@ -182,7 +294,6 @@ class HTMLTools:
 							parents.pop()
 						level -= 1
 						parents.pop()
-
 				# We process the encountered tag
 				new  = level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
 				# We may want to write the found tag to the write stream
@@ -216,11 +327,45 @@ class HTMLTools:
 						level += 1
 				offset = tag_end_offset
 
-	def cut( self, html, level=None, strip=None, contentOnly=False, tags=None ):
-		"""Cuts the given html according to the given tag. For instance, cutting
-		an html document according to divs will return a list of blocks of text
-		beginning and ending with divs (excepted the leading and trailing
+	def join( self, html, tags ):
+		res = []
+		for tag in tags:
+			if type(tag) not in (list, tuple):
+				res.append(tag)
+			else:
+				res.append(html[tag[START]:tag[END]])
+		return "".join(res)
+
+	def cut( self, html, level=None, tags=None, text=True, method=KEEP_ABOVE ):
+		last_level = 0
+		parents    = []
+		if tags: tags = map(string.lower, tags)
+		for tag in self.iterate(html):
+			if type(tag) not in (list, tuple):
+				if level != None:
+					if last_level + 1 == level and method.find(KEEP_SAME)==-1: continue
+					if last_level + 1 <  level and method.find(KEEP_BELOW)==-1: continue
+					if last_level + 1 >  level and method.find(KEEP_ABOVE)==-1: continue
+				if tags and not filter(lambda t:t in parents, tags): continue
+				if text: yield tag
+			else:
+				# We set the parents right
+				while len(parents) != tag[LEVEL]: parents.pop()
+				if tag[TYPE] != HTML_CLOSE: parents.append(tag[NAME].lower())
+				last_level = tag[LEVEL]
+				if level != None:
+					if tag[LEVEL] == level and method.find(KEEP_SAME)==-1: continue
+					if tag[LEVEL] <  level and method.find(KEEP_BELOW)==-1: continue
+					if tag[LEVEL] >  level and method.find(KEEP_ABOVE)==-1: continue
+				if tags and not filter(lambda t:t in parents, tags): continue
+				yield tag
+
+	def split( self, html, level=None, strip=None, tagOnly=False, contentOnly=False, tags=None ):
+		"""Splits the given html according to the given tag. For instance,
+		slicing an html document according to divs will return a list of blocks of
+		text beginning and ending with divs (excepted the leading and trailing
 		blocks)."""
+		assert not tagOnly == contentOnly == True
 		off       = 0
 		cut_level = level
 		for tag in self.iterate(html):
@@ -230,16 +375,19 @@ class HTMLTools:
 			if cut_level == None: cut_level = tag[LEVEL]
 			if tag[TYPE] == HTML_OPEN:
 				if contentOnly: cut_off = tag[END]
-				else: cut_off = tag[START]
+				else:           cut_off = tag[START]
 			else:
 				if contentOnly: cut_off = tag[START]
 				else: cut_off = tag[END]
 			if strip and tag[TYPE] == HTML_OPEN:
 				pass
+			elif tagOnly:
+				if tag[TYPE] != HTML_CLOSE:
+					yield html[tag[START]:tag[END]]
 			else:
 				yield html[off:cut_off]
 			off = cut_off
-		if not strip:
+		if not strip and not tagOnly:
 			yield html[off:]
 
 	def levelof( self, html, tags ):
@@ -263,28 +411,29 @@ class HTMLTools:
 		levels.sort()
 		return levels
 
-	def text( self, data ):
+	def text( self, data, expand=False, norm=False ):
 		"""Strips the text or list (resulting from an @iterate) from HTML
 		tags, so that only the text remains."""
 		if type(data) in (tuple, list):
-			return "".join([text for text in data if type(text) not in (list,tuple)])
+			res = "".join([text for text in data if type(text) not in (list,tuple)])
 		else:
-			return "".join([text for text in self.iterate(data) if type(text) not in (list, tuple)])
+			res = "".join([text for text in self.iterate(data) if type(text) not in (list, tuple)])
+		if expand: res = self.expand(res)
+		if norm: res = self.norm(res)
+		return res
 	
 	def expand( self, text ):
 		"""Expands the entities found in the given text."""
 		# NOTE: This is based on
 		# <http://www.shearersoftware.com/software/developers/htmlfilter/>
 		entityStart = text.find('&')
-		if entityStart != -1:   # only run bulk of code if there are entities present
+		if entityStart != -1:          # only run bulk of code if there are entities present
 			preferUnicodeToISO8859 = 1 #(outputEncoding is not 'iso-8859-1')
 			prevOffset = 0
 			textParts = []
 			while entityStart != -1:
-			
 				textParts.append(text[prevOffset:entityStart])
 				entityEnd = text.find(';', entityStart+1)
-				
 				if entityEnd == -1:
 					entityEnd = entityStart
 					entity = '&'
@@ -313,6 +462,92 @@ class HTMLTools:
 			textParts.append(text[prevOffset:])
 			text = ''.join(textParts)
 		return text
+
+	def tree( self, html ):
+		"""Creates a tree of Nodes from the given HTML document."""
+		root       = Node(name=Node.ROOT,children=[], indice=-1)
+		parents    = [root]
+		counter    = 0
+		for tag in self.iterate(html):
+			#  We create the node
+			if not type(tag) in (tuple, list):
+				parents[-1].append(Node(name=Node.TEXT, text=tag, indice=counter))
+				counter += 1
+			else:
+				# We pop the parents to match the level
+				while len(parents) - 1 > tag[LEVEL]: parents.pop()
+				# We skip close nodes
+				if tag[TYPE] == HTML_CLOSE: continue
+				# We create the node
+				attributes = HTML.parseAttributes(html[tag[ASTART]:tag[AEND]])
+				node       = Node(name=tag[NAME], attributes=attributes, indice=counter)
+				counter   += 1
+				# If it is single
+				if tag[TYPE] == HTML_SINGLE:
+					parents[-1].append(node)
+				# If it is open
+				else:
+					parents[-1].append(node)
+					parents.append(node)
+		return root
+	
+	@staticmethod
+	def norm( text ):
+		return RE_SPACES.sub(" ", text).strip()
+
+	@staticmethod
+	def parseTag( text ):
+		text  = text.strip()
+		space = text.find(" ")
+		if   text[0:2] == "</":  start = 2
+		elif text[0]   == "<":   start = 1
+		else:                    start = 0
+		if   text[-2:0] == "/>": end    = -2
+		elif text[-1]   == ">":  end   = -1
+		else:                    end   = len(text)
+		if space:
+			name  = text[start:space]
+			attr  = text[space:end].strip()
+			return (name, HTML.parseAttributes(attr))
+		else:
+			return (text[start:end].strip(), {})
+
+	@staticmethod
+	def parseAttributes(text, attribs = None):
+		if attribs == None: attribs = {}
+		eq = text.find("=")
+		# There may be attributes without a trailing =
+		# Like  ''id=all type=radio name=meta value="" checked''
+		if eq == -1:
+			space = text.find(" ")
+			if space == -1:
+				name = text.strip()
+				if name: attribs[name] = None
+				return attribs
+			else:
+				name = text[:space].strip()
+				if name: attribs[name] = None
+				return HTML.parseAttributes(text[space+1:], attribs)
+		else:
+			sep = text[eq+1]
+			if   sep == "'": end = text.find( "'", eq + 2 )
+			elif sep == '"': end = text.find( '"', eq + 2 )
+			else: end = text.find(" ", eq)
+			# Did we reach the end ?
+			name = text[:eq].strip()
+			if end == -1:
+				value = text[eq+1:]
+				if value and value[0] in ("'", '"'): value = value[1:-1]
+				else: value = value.strip()
+				attribs[name.lower()] = value
+				return attribs
+			else:
+				value = text[eq+1:end+1]
+				if value[0] in ("'", '"'): value = value[1:-1]
+				else: value = value.strip()
+				attribs[name.lower()] = value
+				return HTML.parseAttributes(text[end+1:].strip(), attribs)
+
 
 # We create a shared instance with the scraping tools
 HTML = HTMLTools()
@@ -353,7 +588,7 @@ class Scraper:
 		for match in matches:
 			tag_end    = html.find(">", match.end())
 			name       = match.group(1).lower()
-			attributes = Scraper.parseHTMLAttributes(html[match.end():tag_end].strip())
+			attributes = HTML.parseAttributes(html[match.end():tag_end].strip())
 			if name == "form":
 				form_name = attributes.get("name")
 				if not form_name:
@@ -365,8 +600,9 @@ class Scraper:
 				assert current_form
 				# TODO: Make this nicer
 				js = filter(lambda s:s[0].startswith("on"), attributes.items())
-				if js:
-					print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
+				# FIXME: Adda a warnings interface
+				#if js:
+				#	print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
 				current_form.inputs.append(attributes)
 			else:
 				raise Exception("Unexpected tag: " + name)
@@ -374,39 +610,29 @@ class Scraper:
 		for form in forms.values(): form._prefill()
 		return forms
 
+	def links( self, html ):
+		"""Iterates through the links found in this document. This yields the
+		tag name and the href value."""
+		if not html: raise ScraperException("No data")
+		for match in self.onRE(html, RE_HTMLLINK):
+			tag  = match.group()
+			tag  = tag[1:tag.find(" ")]
+			href = match.group(1)
+			if href[0] in ("'", '"'): href = href[1:-1]
+			yield tag, href
+
+	
 	@staticmethod
-	def parseHTMLAttributes(text, attribs = None):
-		if attribs == None: attribs = {}
-		eq = text.find("=")
-		# There may be attributes without a trailing =
-		# Like  ''id=all type=radio name=meta value="" checked''
-		if eq == -1:
-			space = text.find(" ")
-			if space == -1:
-				name = text.strip()
-				if name: attribs[name] = None
-				return attribs
-			else:
-				name = text[:space].strip()
-				if name: attribs[name] = None
-				return Scraper.parseHTMLAttributes(text[space+1:], attribs)
-		else:
-			sep = text[eq+1]
-			if   sep == "'": end = text.find( "'", eq + 2 )
-			elif sep == '"': end = text.find( '"', eq + 2 )
-			else: end = text.find(" ", eq)
-			# Did we reach the end ?
-			name = text[:eq]
-			if end == -1:
-				value = text[eq+1:]
-				if value and value[0] in ("'", '"'): value = value[1:-1]
-				else: value = value.strip()
-				attribs[name.lower()] = value
-				return attribs
-			else:
-				value = text[eq+1:end+1]
-				if value[0] in ("'", '"'): value = value[1:-1]
-				else: value = value.strip()
-				attribs[name.lower()] = value
-				return Scraper.parseHTMLAttributes(text[end+1:].strip(), attribs)
+	def onRE( text, regexp, off=0 ):
+		"""Itearates through the matches for the given regular expression."""
+		res = True
+		while res:
+			res = regexp.search(text, off)
+			if res:
+				off = res.end()
+				yield res
+
+# The default scraper
+scraper = Scraper()
+
 # EOF

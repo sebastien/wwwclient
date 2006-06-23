@@ -19,10 +19,11 @@ session.submit( login_form,
 
 # And now we list the inventory
 html       = session.get("http://ppg.hebdo.net/inventory/list.asp").data()
-trs        = list(scrape.HTML.cut(html,       level=6, strip=True, tags="tr"))
+#print tuple(scrape.HTML.iterate(html, write=sys.stdout))
+trs        = list(scrape.HTML.split(html, level=9, strip=True, tags="tr"))
 for tr in trs:
 	un_nbsp = lambda s:s.replace("&nbsp;", "").replace("&nbsp", "").replace("nbsp","")
-	tds = map(un_nbsp, map(scrape.HTML.text, list(scrape.HTML.cut(tr, strip=True, contentOnly=True, tags="td"))))
+	tds = map(un_nbsp, map(scrape.HTML.text, list(scrape.HTML.split(tr, strip=True, contentOnly=True, tags="td"))))
 	if len(tds) != 13: continue
 	print tds
 
