@@ -5,3 +5,7 @@
  - Split supports open tags without closing tags
  - Curl modules supports retries (when errors occur)
  - Added "fields" support
+ - Improved form fields and actions handling
+ - Preliminary documentation
+ - Improved attachments support
+

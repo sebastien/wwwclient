@@ -11,7 +11,7 @@
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
 
-import urlparse, urllib, mimetypes, re
+import urlparse, urllib, mimetypes, re, os
 import curl
 
 __version__ = "2.0"
@@ -113,7 +113,16 @@ class Request:
 	"""The Request object encapsulates an HTTP request so that it is easy to
 	specify headers, cookies, data and attachments."""
 
-	def __init__( self, method=GET, url="/", fields=None, params=None, headers=None, data=None ):
+	@staticmethod
+	def makeAttachment( name, file=None, content=None ):
+		if file != None:
+			return (name, file, FILE_ATTACHMENT)
+		elif content != None:
+			return (name, content, CONTENT_ATTACHMENT)
+		else:
+			raise Exception("Expected file or content")
+
+	def __init__( self, method=GET, url="/", fields=None, attach=(), params=None, headers=None, data=None ):
 		self._method      = method.upper()
 		self._url         = url
 		self._params      = Pairs(params)
@@ -122,6 +131,7 @@ class Request:
 		self._data        = data
 		self._fields      = Pairs(fields)
 		self._attachments = []
+		if attach: self._attachments.extend(attach)
 		# Ensures that the method is a proper one
 		if self._method not in METHODS:
 			raise Exception("Method not supported: %s" % (method))
@@ -174,10 +184,10 @@ class Request:
 	def data( self, data=curl ):
 		"""Sets the urlencoded data for this request. The request will be
 		automatically turned into a post."""
-		assert not self._attachments, "Request already has attachments"
 		if data == curl:
 			return self._data
 		else:
+			assert not self._attachments, "Request already has attachments"
 			self._method = POST
 			self._data   = data
 
@@ -186,12 +196,8 @@ class Request:
 		request into a post"""
 		assert self._data == None, "Request already has data"
 		self._method = POST
-		if file != None:
-			self._attachments.append((name, file, FILE_ATTACHMENT))
-		elif content != None:
-			self._attachments.append((name, file, CONTENT_ATTACHMENT))
-		else:
-			raise Exception("Expected file or content")
+		self._attachments.append(Request.makeAttachment(name, file=file,
+		content=content))
 
 	def attachments( self ):
 		return self._attachments
@@ -339,12 +345,36 @@ class Session:
 		transaction in the session."""
 		if not self._transactions: return None
 		return self._transactions[-1]
-	
+
+	def attach( self, name, file=None, content=None):
+		return Request.makeAttachment( name, file=file, content=content )
+
+	def dump( self, path, overwrite=True ):
+		"""Dumps the last retrieved data to the given file."""
+		count = 0
+		if not overwrite:
+			while os.path.exists(path):
+				base, ext = os.path.splitext(path)
+				i =  base.rfind("-") 
+				if i != -1:
+					try: v = int(base[i+1:])
+					except: v = None
+				else:
+					v = None
+				if v != None: base = base[:i]
+				path = base + "-" + str(count) + ext
+				count += 1
+		print "DUMPING", path
+		f = file(path, "w")
+		f.write(self.last().data())
+		f.close()
+
 	def referer( self ):
 		if not self.last(): return None
 		else: return self.last().url()
 
 	def get( self, url="/", params=None, headers=None, follow=True, do=True ):
+		# TODO: Return data instead of session
 		url         = self.__processURL(url)
 		request     = self._createRequest( url=url, params=params, headers=headers )
 		transaction = Transaction( self, request )
@@ -358,10 +388,10 @@ class Session:
 				transaction = self.get(transaction.redirect(), do=True)
 		return transaction
 
-	def post( self, url=None, params=None, data=None, fields=None, headers=None, follow=True, do=True ):
+	def post( self, url=None, params=None, data=None, fields=None, attach=None, headers=None, follow=True, do=True ):
 		url = self.__processURL(url)
 		request     = self._createRequest(
-			method=POST, url=url, fields=fields, params=params, data=data, headers=headers
+			method=POST, url=url, fields=fields, params=params, attach=attach, data=data, headers=headers
 		)
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
@@ -373,7 +403,7 @@ class Session:
 				transaction = self.get(transaction.redirect(), do=True)
 		return transaction
 	
-	def submit( self, form, values={}, action=None,  method=POST, do=True ):
+	def submit( self, form, values={}, attach=[], action=None,  method=POST, do=True ):
 		"""Submits the given form with the current values and action (first
 		action by default) to the form action url, and doing
 		a POST or GET with the resulting values (POST by default).
@@ -383,12 +413,12 @@ class Session:
 		# We fill the form values
 		# And we submit the form
 		url    = form.action or self.referer()
-		fields = form.submit(action, **values)
+		fields = form.submit(action=action, **values)
 		# FIXME: Manage encodings consistently
-		if method == POST:
-			return self.post( url, fields=fields, do=do )
+		if method == POST or attach:
+			return self.post( url, fields=fields, attach=attach, do=do )
 		elif method == GET:
-			return self.get( url, params=fields, do=do )
+			return self.get( url,  params=fields, do=do )
 		else:
 			raise SessionException("Unsupported method for submit: " + method)
 

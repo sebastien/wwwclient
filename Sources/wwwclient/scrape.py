@@ -15,7 +15,7 @@ RE_SPACES    = re.compile("\s+")
 RE_FORMDATA  = re.compile("<(form|input)", re.I)
 RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
-RE_HTMLLINK  = re.compile("<[^<]+href\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
+RE_HTMLLINK  = re.compile("<[^<]+(href|src)\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
 
 RE_HTMLCLASS = re.compile("class\s*=\s*['\"]?([\w\-_\d]+)", re.I)
 RE_HTMLID    = re.compile("id\s*=\s*['\"]?([\w\-_\d]+)", re.I)
@@ -538,7 +538,7 @@ class Form:
 				res.append((key, value))
 		return res
 
-	def submit( self, action=None, encoding="latin-1", **values ):
+	def submit( self, action=None, encoding="latin-1", strip=True, **values ):
 		"""Submits this form with the given action and given values."""
 		self.fill(**values)
 		parameters  = []
@@ -547,15 +547,20 @@ class Form:
 		# We fill values that were initialized
 		for key in field_names:
 			value = self.values.get(key)
+			if strip and not value: continue
 			if type(value) == unicode: value = unicode(value).encode(encoding)
 			if self.values.has_key(key):
 				parameters.append((key, value))
 		# And add values that do not correspond to any field
 		for key, value in values.items():
 			if key not in field_names:
+				if strip and not value: continue
 				if type(value) == unicode: value = unicode(value).encode(encoding)
 				parameters.append((key, value))
 		if action:
+			if action not in self.actions(namesOnly=True):
+				raise FormException("Action not available: %s, in form %s" %
+				(action, self.name))
 			parameters.append((action, self.values.get(action)))
 		return parameters
 
@@ -567,6 +572,7 @@ class Form:
 			if name and value: self.values[name] = value
 	
 	def asText( self ):
+		# TODO: Rewrite Form.asText, it is ugly.
 		cut     = 20
 		res     = "FORM: %s (%s)\n" % (self.name, self.action)
 		rows    = []
@@ -577,16 +583,26 @@ class Form:
 			else: return a
 		for inp in self.inputs:
 			rows.append([inp.get("type"), inp.get("name"), self.values.get(inp.get("name")), inp.get("value")])
-			rows[-1] = map(cut_row, rows[-1])
+			rows[-1][2] = cut_row(rows[-1][2])
+			rows[-1][3] = cut_row(rows[-1][3])
 			for i in range(len(rows[-1])):
 				if len(max_row) == len(rows[-1]):
-					max_row[i] = max(max_row[i], min(cut, len(str(rows[-1][i]))))
+					max_row[i] = max(max_row[i], len(str(rows[-1][i])))
 				else:
-					max_row.append(min(cut, len(str(rows[-1][i]))))
-		format = "%-" + str(max_row[0]) + "s | %-" + str(max_row[1]) + "s = %s / %s (dfl)"
+					max_row.append(len(str(rows[-1][i])))
+		format  = "%-" + str(max_row[0]) + "s | %-" + str(max_row[1])  + "s"
+		format += "= %-" + str(max_row[2]) + "s  %" + str(max_row[3]) + "s"
 		rows.sort(lambda a,b:cmp(a[0:2], b[0:2]))
 		for row in rows:
-			res += format % (row[0], row[1], row[2], row[3])
+			if row[2] == row[3]:
+				state   = row[3]
+				default = "(default)"
+			else:
+				state   = row[2]
+				default = ""
+			if state == "None": state = ""
+
+			res += format % (row[0], row[1], state, default)
 			res += "\n"
 		return res
 
@@ -643,7 +659,8 @@ class Scraper:
 			else:
 				raise Exception("Unexpected tag: " + name)
 		# Prefills the forms
-		for form in forms.values(): form._prefill()
+		for form in forms.values():
+			form._prefill()
 		return forms
 
 	def links( self, html ):
@@ -653,11 +670,10 @@ class Scraper:
 		for match in self.onRE(html, RE_HTMLLINK):
 			tag  = match.group()
 			tag  = tag[1:tag.find(" ")]
-			href = match.group(1)
+			href = match.group(2)
 			if href[0] in ("'", '"'): href = href[1:-1]
 			yield tag, href
 
-	
 	@staticmethod
 	def onRE( text, regexp, off=0 ):
 		"""Itearates through the matches for the given regular expression."""

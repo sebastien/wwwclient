@@ -144,7 +144,7 @@ class HTTPClient:
 		# PyCurl offers three ways to do a post
 		r.setopt(pycurl.POST, 1)
 		if data != None:
-			assert fields == None, "Fields must be None when data is provided"
+			assert not fields, "Fields must be empty when data is provided"
 			assert not attach, "No attachment is allowed when data is provided"
 			r.setopt(pycurl.POSTFIELDS, data)
 		elif attach or fields:
@@ -168,7 +168,9 @@ class HTTPClient:
 						field_data.append((name, (pycurl.FORM_CONTENTS, value)))
 					else:
 						raise Exception("Unknown attachment type: %s" % (atype))
-			print field_data
+			for field, value in field_data:
+				if field.startswith("__"): continue
+				print field, "==",value
 			r.setopt(pycurl.HTTPPOST, field_data)
 		else:
 			raise Exception("Post with no data")
