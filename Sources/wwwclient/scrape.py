@@ -31,88 +31,6 @@ KEEP_ABOVE    = "+"
 KEEP_SAME     = "="
 KEEP_BELOW    = "-"
 
-# -----------------------------------------------------------------------------
-#
-# FORM
-#
-# -----------------------------------------------------------------------------
-
-class FormException(Exception): pass
-class Form:
-	"""A simple interface to forms, returned by the scraper. Forms can be easily
-	filled and their values (@values) can be given as parameters to the @browse
-	module."""
-
-	def __init__( self, name, action=None ):
-		self.name   = name
-		self.action = action
-		self.inputs = []
-		self.values = {}
-
-	def fields( self, namesOnly=False ):
-		res = filter(lambda f:f.get("type") != "submit", self.inputs)
-		if namesOnly: res = tuple(f.get("name") for f in res)
-		return res
-	
-	def actions( self, namesOnly=False ):
-		res = filter(lambda f:f.get("type")=="submit", self.inputs)
-		if namesOnly: res = tuple(f.get("name") for f in res)
-		return res
-
-	def clear( self ):
-		"""Clears the existing values set in this form, and returns them."""
-		old_values = self.values
-		self.values = {}
-		return old_values
-
-	def fill( self, **values ):
-		field_names = map(lambda f:f.get("name"), self.fields())
-		for name, value in values.items():
-			self.values[name] = value
-
-	def parameters( self ):
-		"""Returns a list of (key,value) respecting the original input order."""
-		res   = []
-		names = []
-		for field in self.inputs:
-			name = field.get("name")
-			names.append(name)
-			if not name: continue
-			if self.values.get(name) == None: continue
-			res.append((name, self.values.get(name)))
-		# The user may have added specific parameters that do not correspond to
-		# a specific input, so we ensure that they are added here
-		for key, value in self.values.items():
-			if key not in names:
-				res.append((key, value))
-		return res
-
-	def submit( self, action=None, **values ):
-		"""Submits this form with the given action and given values."""
-		self.fill(**values)
-		parameters  = []
-		field_names = self.fields(namesOnly=True)
-		# We fill values that were initialized
-		for key in field_names:
-			value = self.values.get(key)
-			if self.values.has_key(key):
-				parameters.append((key, value))
-		# And add values that do not correspond to any field
-		for key, value in values.items():
-			if key not in field_names:
-				parameters.append((key, value))
-		# if action: parameters.append((action, self.values.get(action)))
-		return parameters
-
-	def _prefill( self ):
-		"""Sets the default values for this form."""
-		for inp in self.inputs:
-			name  = inp.get("name")
-			value = inp.get("value")
-			if name and value: self.values[name] = value
-	
-	def __repr__( self ):
-		return repr(self.inputs)
 
 # -----------------------------------------------------------------------------
 #
@@ -556,6 +474,124 @@ def do( f, *args, **kwargs ):
 	"""This function is useful to "do" iterator functions which are only run if
 	put within a loop or tuple/list function."""
 	return tuple(f(*args, **kwargs))
+
+# -----------------------------------------------------------------------------
+#
+# FORM
+#
+# -----------------------------------------------------------------------------
+
+class FormException(Exception): pass
+class Form:
+	"""A simple interface to forms, returned by the scraper. Forms can be easily
+	filled and their values (@values) can be given as parameters to the @browse
+	module."""
+
+# TODO: Add STRICT mode for form that checks possible values/action/field names
+
+	def __init__( self, name, action=None ):
+		self.name   = name
+		self.action = action
+		self.inputs = []
+		self.values = {}
+
+	def fields( self, namesOnly=False ):
+		"""Returns that list of inputs (or input names if namesOnly is True) that
+		can be assigned a value (checkboxes, inputs, text areas, etc)."""
+		res = filter(lambda f:f.get("type") != "submit", self.inputs)
+		if namesOnly: res = tuple(f.get("name") for f in res)
+		return res
+
+	def actions( self, namesOnly=False ):
+		"""Returns the list of inputs (or input names if namesOnly is True) that
+		correspond to form action buttons."""
+		res = filter(lambda f:f.get("type")=="submit", self.inputs)
+		if namesOnly: res = tuple(f.get("name") for f in res)
+		return res
+
+	def clear( self ):
+		"""Clears the existing values set in this form, and returns them."""
+		old_values = self.values
+		self.values = {}
+		return old_values
+
+	def fill( self, **values ):
+		"""Fills this form with the given values."""
+		field_names = map(lambda f:f.get("name"), self.fields())
+		for name, value in values.items():
+			self.values[name] = value
+
+	def parameters( self ):
+		"""Returns a list of (key,value) respecting the original input order."""
+		res   = []
+		names = []
+		for field in self.inputs:
+			name = field.get("name")
+			names.append(name)
+			if not name: continue
+			if self.values.get(name) == None: continue
+			res.append((name, self.values.get(name)))
+		# The user may have added specific parameters that do not correspond to
+		# a specific input, so we ensure that they are added here
+		for key, value in self.values.items():
+			if key not in names:
+				res.append((key, value))
+		return res
+
+	def submit( self, action=None, encoding="latin-1", **values ):
+		"""Submits this form with the given action and given values."""
+		self.fill(**values)
+		parameters  = []
+		# We get the field and action names
+		field_names  = self.fields(namesOnly=True)
+		# We fill values that were initialized
+		for key in field_names:
+			value = self.values.get(key)
+			if type(value) == unicode: value = unicode(value).encode(encoding)
+			if self.values.has_key(key):
+				parameters.append((key, value))
+		# And add values that do not correspond to any field
+		for key, value in values.items():
+			if key not in field_names:
+				if type(value) == unicode: value = unicode(value).encode(encoding)
+				parameters.append((key, value))
+		if action:
+			parameters.append((action, self.values.get(action)))
+		return parameters
+
+	def _prefill( self ):
+		"""Sets the default values for this form."""
+		for inp in self.inputs:
+			name  = inp.get("name")
+			value = inp.get("value")
+			if name and value: self.values[name] = value
+	
+	def asText( self ):
+		cut     = 20
+		res     = "FORM: %s (%s)\n" % (self.name, self.action)
+		rows    = []
+		max_row = []
+		def cut_row( a ):
+			a = str(a)
+			if len(a) > cut: return a[:cut - 3] + "..."
+			else: return a
+		for inp in self.inputs:
+			rows.append([inp.get("type"), inp.get("name"), self.values.get(inp.get("name")), inp.get("value")])
+			rows[-1] = map(cut_row, rows[-1])
+			for i in range(len(rows[-1])):
+				if len(max_row) == len(rows[-1]):
+					max_row[i] = max(max_row[i], min(cut, len(str(rows[-1][i]))))
+				else:
+					max_row.append(min(cut, len(str(rows[-1][i]))))
+		format = "%-" + str(max_row[0]) + "s | %-" + str(max_row[1]) + "s = %s / %s (dfl)"
+		rows.sort(lambda a,b:cmp(a[0:2], b[0:2]))
+		for row in rows:
+			res += format % (row[0], row[1], row[2], row[3])
+			res += "\n"
+		return res
+
+	def __repr__( self ):
+		return "Form '%s'->%s: %s" % (self.name, self.action, repr(self.inputs))
 
 # -----------------------------------------------------------------------------
 #

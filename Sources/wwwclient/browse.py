@@ -95,6 +95,10 @@ class Pairs:
 	def asCookies( self ):
 		"""Returns these pairs as cookies"""
 		return "; ".join("%s=%s" % (k,v) for k,v in self.pairs)
+	
+	def asFields( self ):
+		"""Returns a list of (name, value) couples."""
+		return list(self.pairs)
 
 	def __repr__(self):
 		return repr(self.pairs)
@@ -109,13 +113,14 @@ class Request:
 	"""The Request object encapsulates an HTTP request so that it is easy to
 	specify headers, cookies, data and attachments."""
 
-	def __init__( self, method=GET, url="/", params=None, headers=None, data=None ):
-		self._method     = method.upper()
-		self._url        = url
-		self._params     = Pairs(params)
-		self._cookies    = Pairs()
-		self._headers    = Pairs()
-		self._data       = data
+	def __init__( self, method=GET, url="/", fields=None, params=None, headers=None, data=None ):
+		self._method      = method.upper()
+		self._url         = url
+		self._params      = Pairs(params)
+		self._cookies     = Pairs()
+		self._headers     = Pairs(headers)
+		self._data        = data
+		self._fields      = Pairs(fields)
 		self._attachments = []
 		# Ensures that the method is a proper one
 		if self._method not in METHODS:
@@ -141,6 +146,9 @@ class Request:
 	def params( self ):
 		return self._params
 	
+	def fields( self ):
+		return self._fields
+
 	def cookies( self ):
 		return self._cookies
 
@@ -210,7 +218,7 @@ class Transaction:
 
 	def __init__( self, session, request ):
 		self._curl     = session._httpClient
-		self._curl.verbose = session.verbose
+		self._curl.verbose = session.verbose and 1 or 0
 		self._session  = session
 		self._request  = request
 		self._cookies  = Pairs()
@@ -269,6 +277,7 @@ class Transaction:
 				request.url(),
 				data=request.data(),
 				attach=request.attachments(),
+				fields=request.fields().asFields(),
 				headers=request.headers().asHeaders()
 			)
 		# The method may be unsupported
@@ -349,10 +358,10 @@ class Session:
 				transaction = self.get(transaction.redirect(), do=True)
 		return transaction
 
-	def post( self, url=None, params=None, data=None, headers=None, follow=True, do=True ):
+	def post( self, url=None, params=None, data=None, fields=None, headers=None, follow=True, do=True ):
 		url = self.__processURL(url)
 		request     = self._createRequest(
-			method=POST, url=url, params=params, data=data, headers=headers
+			method=POST, url=url, fields=fields, params=params, data=data, headers=headers
 		)
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
@@ -373,12 +382,13 @@ class Session:
 		and gives its values as parameters to the post method."""
 		# We fill the form values
 		# And we submit the form
-		url            = form.action or self.referer()
-		url_parameters = form.submit(action, **values)
+		url    = form.action or self.referer()
+		fields = form.submit(action, **values)
+		# FIXME: Manage encodings consistently
 		if method == POST:
-			return self.post( url, data=urllib.urlencode(url_parameters), do=do )
+			return self.post( url, fields=fields, do=do )
 		elif method == GET:
-			return self.get( url, params=url_parameters, do=do )
+			return self.get( url, params=fields, do=do )
 		else:
 			raise SessionException("Unsupported method for submit: " + method)
 

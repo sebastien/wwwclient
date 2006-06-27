@@ -1,0 +1,100 @@
+== WWWClient
+-- Advanced web browsing, scraping and automation
+-- Author: Sébastien Pierre, XPrima
+-- Date: 27-Jun-2006
+
+About
+=====
+
+Browsing
+========
+
+Concepts
+--------
+
+Session, transaction, request, response
+Cookies
+
+Accessing a website
+-------------------
+
+Initiate a session
+
+
+Posting data 
+------------
+
+There are different ways to communicate data to an HTTP server. WWWClient
+browsing API offers different ways of doing so, depending on the type of HTTP
+request you want to issue:
+
+    1) Posting with GET and values as parameters::
+       |
+       >    session.get("http://www.google.com", params={"name":"value", ...)
+       >    GET http://www.google.com?name=value
+
+    2) Posting with POST and values as parameters::
+       |
+       >    session.post("http://www.google.com", params={"name":"value", ...)
+       >    POST http://www.google.com?name=value
+
+    3) Posting with POST and values as url-encoded data::
+       |
+       >    session.post("http://www.google.com", params={"name":"value", ...)
+       >    POST http://www.google.com
+       >    ...
+       >    Content-Length: 10
+       >    name=value
+
+    4) Posting with POST and values as form-encoded data::
+       |
+       >    session.post("http://www.google.com", fields={"name":"value", ...)
+       >    POST http://www.google.com
+       >    ...
+       >    Content-Length: 10
+       >    name=value
+
+    5) Posting with POST and values as custom data::
+       |
+       >    session.post("http://www.google.com", data="name=value")
+       >    POST http://www.google.com
+       >    ...
+       >    Content-Length: 10
+       >    name=value
+
+Scraping
+========
+
+Getting important data
+----------------------
+
+    1) Forms::
+    2) Links::
+
+Detecting changes
+-----------------
+
+    1) Specify which elements should be tracked
+    2) Compute the "tag" for the set of elements
+
+
+Text encoding support
+=====================
+
+As text data may come from various sources, some may be already encoded or not.
+To ensure that proper conversion is made, the following WWWClient elements
+feature an `encoding` property or argument to relevant methods that allows to
+specify in which encoding the given text data is encoded. This will ensure that
+the data is properly converted to raw strings before being passed to the
+transport layer (provided by the Curl library).
+
+    - Session:: encoding defines the default encoding for all the requests,
+      cookies, headers, parameters, fields and provided data. Setting a session
+      encoding will set every transaction, request and underlying curl handler
+      encodings to the session one.
+
+    - Form:: when filling values within a form, the values will be converted to
+      string when necessary. The given encoding will tell in which encoded the
+      string should be coded.
+
+# vim: ts=4 sw=4 et

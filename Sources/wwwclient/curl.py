@@ -6,10 +6,10 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 20-Jun-2006
-# Last mod  : 22-Jun-2006
+# Last mod  : 27-Jun-2006
 # -----------------------------------------------------------------------------
 
-import pycurl, re, urlparse, StringIO
+import pycurl, re, time, urlparse, StringIO
 
 # TODO: Find more use cases for chunked mode
 # TODO: Add cookie encode/decode functions
@@ -74,8 +74,10 @@ class HTTPClient:
 		self._redirect   = None
 		self._newCookies = None
 		self._responses  = None
-		self.verbose     = False
+		self.verbose     = 0
 		self.encoding    = encoding
+		self.retryDelay  = 0.100
+		self.retryCount  = 5
 
 	def url( self ):
 		"""Returns the last URL processed by this Curl HTTP interface."""
@@ -150,15 +152,23 @@ class HTTPClient:
 			# TODO: Assert no field override
 			field_data = []
 			if fields:
-				field_data.extend(fields)
+				for name, value in fields:
+					if   type(value) == unicode: value = value.encode(self.encoding)
+					elif value == None: value = ""
+					else: value = str(value)
+					field_data.append((name, (pycurl.FORM_CONTENTS, value)))
 			if attach:
 				for name, value, atype in attach:
+					if type(value) == unicode: value = value.encode(self.encoding)
+					elif value == None: value = ""
+					else: value = str(value)
 					if atype == FILE_ATTACHMENT:
 						field_data.append((name, (pycurl.FORM_FILE, value)))
 					elif atype == CONTENT_ATTACHMENT:
-						field_data.append((name, (pycurl.FORM_CONTENT, value)))
+						field_data.append((name, (pycurl.FORM_CONTENTS, value)))
 					else:
 						raise Exception("Unknown attachment type: %s" % (atype))
+			print field_data
 			r.setopt(pycurl.HTTPPOST, field_data)
 		else:
 			raise Exception("Post with no data")
@@ -192,17 +202,26 @@ class HTTPClient:
 			c.setopt(c.HTTPHEADER, headers)
 		return (c, s)
 
-	def _performRequest( self ):
+	def _performRequest( self, counter=0 ):
 		"""Performs the current HTTP request."""
 		r = self._curl
-		r.perform()
+		if self.verbose >= 2: self._curl.setopt(self._curl.VERBOSE, 1)
+		try:
+			r.perform()
+		except:
+			if counter == self.retryCount:
+				raise e
+			else:
+				time.sleep(self.retryDelay)
+				self._performRequest( counter + 1)
+				return
 		self._status = r.getinfo(pycurl.HTTP_CODE)
 		self._url    = r.getinfo(pycurl.EFFECTIVE_URL)
 		self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
 		self._parseResponse()
 		self._curl.close()
 		self._curl = None
-		if self.verbose: print self.info(), "\n"
+		if self.verbose >= 1: print self.info(), "\n"
 
 	def _parseResponse( self ):
 		"""Parse the message, and return a list of responses and headers. This

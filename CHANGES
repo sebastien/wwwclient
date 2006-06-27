@@ -1,0 +1,7 @@
+ version 0.5:
+ - Charset support in curl module
+ - Added HTML tree generation
+ - HTML normalization through tree conversion
+ - Split supports open tags without closing tags
+ - Curl modules supports retries (when errors occur)
+ - Added "fields" support
