@@ -115,15 +115,15 @@ class Request:
 
 	@staticmethod
 	def makeAttachment( name, filename=None, content=None,
-	mimeType=curl.DEFAULT_MIMETYPE ):
+	mimetype=curl.DEFAULT_MIMETYPE ):
 		"""Creates an internal representation for an attachment, which is either
 		the given filename or the given content, filename and data"""
 		if content != None:
 			assert filename, "Filename is required when attaching content"
-			assert mimeType, "Mimetype is required when attaching content"
-			return (name, (filename, content, mimeType), CONTENT_ATTACHMENT)
+			assert mimetype, "Mimetype is required when attaching content"
+			return (name, (filename, mimetype, content), CONTENT_ATTACHMENT)
 		elif file != None:
-			assert mimeType == curl.DEFAULT_MIMETYPE, "Mimetype is ignored when attaching file"
+			assert mimetype == curl.DEFAULT_MIMETYPE, "Mimetype is ignored when attaching file"
 			return (name, filename, FILE_ATTACHMENT)
 		else:
 			raise Exception("Expected file or content")
@@ -197,13 +197,13 @@ class Request:
 			self._method = POST
 			self._data   = data
 
-	def attach( self, name, filename=None, content=None ):
+	def attach( self, name, filename=None, content=None, mimetype=None ):
 		"""Attach the given file or content to the request. This will turn the
 		request into a post"""
 		assert self._data == None, "Request already has data"
 		self._method = POST
 		self._attachments.append(Request.makeAttachment(name, filename=filename,
-		content=content))
+		content=content, mimetype=mimetype))
 
 	def attachments( self ):
 		return self._attachments
@@ -352,7 +352,7 @@ class Session:
 		if not self._transactions: return None
 		return self._transactions[-1]
 
-	def attach( self, name, filename=None, content=None):
+	def attach( self, name, filename=None, content=None, mimetype=None ):
 		return Request.makeAttachment( name, filename=filename, content=content )
 
 	def dump( self, path, overwrite=True ):

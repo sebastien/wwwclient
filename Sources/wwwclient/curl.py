@@ -9,7 +9,7 @@
 # Last mod  : 04-Jul-2006
 # -----------------------------------------------------------------------------
 
-import pycurl, re, time, urlparse, mimetypes, StringIO
+import pycurl, re, time, urlparse, mimetypes, StringIO, httplib
 
 # TODO: Find more use cases for chunked mode
 # TODO: Add cookie encode/decode functions
@@ -148,7 +148,7 @@ class HTTPClient:
 		if follow and self.redirect(): self.follow()
 		return self.data()
 
-	def POST( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None, follow=False ):
+	def POST__( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None, follow=False ):
 		"""Posts the given data (as urlencoded string), or fields as list of
 		(name, value) pairs and/or attachments as list of (name, value, type)
 		triples. Headers and follow attributes are the same as for the @GET
@@ -183,6 +183,42 @@ class HTTPClient:
 		self._performRequest()
 		if follow and self.redirect(): self.follow()
 		return self.data()
+	
+	def POST( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None, follow=False ):
+		# Encodes the data, prepares headers
+		data, mimetype = self.encodeMultipart(fields, attach)
+		if mimetype:
+			if headers == None: headers = []
+			# TODO: Optimize this, it is kind of slow
+			headers = list(filter(lambda x: RE_CONTENT_TYPE.match(x) == None, headers))
+			headers.append("Content-Type: " + mimetype)
+		headers.append("Content-Length: " + self._valueToString(len(data)))
+		# We prepare the request
+		http = httplib.HTTPConnection(self.host())
+		http_headers = {}
+		for header in headers:
+			colon = header.find(":")
+			http_headers[header[:colon].strip()] = header[colon+1:]
+		# Data
+		request  = http.request("POST", url, data, http_headers)
+		# get response
+		response = http.getresponse()
+		if response.version == 10: res = "HTTP/1.0 "
+		else: res = "HTTP/1.1 "
+		res += str(response.status) + " "
+		res += str(response.reason) + CRLF
+		res += str(response.msg)
+		res += response.read()
+		# Copied from perform request
+		self._status = response.status
+		self._url    = url #FIXME: Handle location
+		self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
+		self._parseResponse(res)
+		if self._curl: self._curl.close()
+		self._curl = None
+		print self.info(), "\n"
+		if follow and self.redirect(): self.follow()
+		return res
 
 	def _valueToString( self, value ):
 		"""Ensures that the given value will be an encoded string, encoded in
@@ -239,12 +275,12 @@ class HTTPClient:
 		self._curl = None
 		if self.verbose >= 1: print self.info(), "\n"
 
-	def _parseResponse( self ):
+	def _parseResponse( self, message=None ):
 		"""Parse the message, and return a list of responses and headers. This
 		might occur when there is a provisional response in between, or when
 		location are followed. The result is a list of (firstline, headers,
 		body), all as unparsed stings."""
-		message = self._buffer.getvalue()
+		if message == None: message = self._buffer.getvalue()
 		res     = []
 		off     = 0
 		self._newCookies = []
