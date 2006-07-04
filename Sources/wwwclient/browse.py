@@ -12,7 +12,7 @@
 # TODO: Allow Request to have parameters in body or url and attachments as well
 
 import urlparse, urllib, mimetypes, re, os
-import curl
+import client, curlclient, defaultclient
 
 __version__ = "2.0"
 
@@ -25,8 +25,8 @@ POST               = "POST"
 HEAD               = "HEAD"
 METHODS            = (GET, POST, HEAD)
 
-FILE_ATTACHMENT    = curl.FILE_ATTACHMENT
-CONTENT_ATTACHMENT = curl.CONTENT_ATTACHMENT
+FILE_ATTACHMENT    = client.FILE_ATTACHMENT
+CONTENT_ATTACHMENT = client.CONTENT_ATTACHMENT
 
 # -----------------------------------------------------------------------------
 #
@@ -115,15 +115,17 @@ class Request:
 
 	@staticmethod
 	def makeAttachment( name, filename=None, content=None,
-	mimetype=curl.DEFAULT_MIMETYPE ):
+	mimetype=client.DEFAULT_MIMETYPE ):
 		"""Creates an internal representation for an attachment, which is either
 		the given filename or the given content, filename and data"""
 		if content != None:
 			assert filename, "Filename is required when attaching content"
 			assert mimetype, "Mimetype is required when attaching content"
-			return (name, (filename, mimetype, content), CONTENT_ATTACHMENT)
+			value = (filename, mimetype, content)
+			assert len(value) == 3
+			return (name, value, CONTENT_ATTACHMENT)
 		elif file != None:
-			assert mimetype == curl.DEFAULT_MIMETYPE, "Mimetype is ignored when attaching file"
+			assert mimetype == client.DEFAULT_MIMETYPE, "Mimetype is ignored when attaching file"
 			return (name, filename, FILE_ATTACHMENT)
 		else:
 			raise Exception("Expected file or content")
@@ -168,9 +170,9 @@ class Request:
 	def cookies( self ):
 		return self._cookies
 
-	def header( self, name, value=curl ):
+	def header( self, name, value=client ):
 		"""Gets or set the given header."""
-		if value == curl:
+		if value == client:
 			return self._headers.get(name)
 		else:
 			self._headers.set(name, str(value))
@@ -187,10 +189,10 @@ class Request:
 				headers.set("Cookie", self._cookies.asCookies())
 		return headers
 
-	def data( self, data=curl ):
+	def data( self, data=client ):
 		"""Sets the urlencoded data for this request. The request will be
 		automatically turned into a post."""
-		if data == curl:
+		if data == client:
 			return self._data
 		else:
 			assert not self._attachments, "Request already has attachments"
@@ -229,8 +231,8 @@ class Transaction:
 	"""
 
 	def __init__( self, session, request ):
-		self._curl     = session._httpClient
-		self._curl.verbose = session.verbose and 1 or 0
+		self._client     = session._httpClient
+		self._client.verbose = session.verbose and 1 or 0
 		self._session  = session
 		self._request  = request
 		self._cookies  = Pairs()
@@ -252,11 +254,11 @@ class Transaction:
 	def data( self ):
 		"""Returns the response data (implies that the transaction was
 		previously done)"""
-		return self._curl.data()
+		return self._client.data()
 
 	def redirect( self ):
 		"""Returns the URL to which the response redirected, if any."""
-		return self._curl.redirect()
+		return self._client.redirect()
 
 	def url( self ):
 		"""Returns the requested URL."""
@@ -264,7 +266,7 @@ class Transaction:
 	
 	def newCookies( self ):
 		"""Returns the list of new cookies."""
-		return Pairs(self._curl.newCookies())
+		return Pairs(self._client.newCookies())
 
 	def do( self ):
 		"""Executes this transaction"""
@@ -279,13 +281,13 @@ class Transaction:
 		request.cookies().merge(self.cookies())
 		# We send the request as a GET
 		if request.method() == GET:
-			self._curl.GET(
+			self._client.GET(
 				request.url(),
 				headers=request.headers().asHeaders()
 			)
 		# Or as a POST
 		elif request.method() == POST:
-			self._curl.POST(
+			self._client.POST(
 				request.url(),
 				data=request.data(),
 				attach=request.attachments(),
@@ -332,7 +334,7 @@ class Session:
 	def __init__( self, url=None, verbose=False ):
 		"""Creates a new session at the given host, and for the given
 		protocol."""
-		self._httpClient      = curl.HTTPClient()
+		self._httpClient      = defaultclient.HTTPClient()
 		self._host            = None
 		self._protocol        = None
 		self._transactions    = []
@@ -353,7 +355,8 @@ class Session:
 		return self._transactions[-1]
 
 	def attach( self, name, filename=None, content=None, mimetype=None ):
-		return Request.makeAttachment( name, filename=filename, content=content )
+		return Request.makeAttachment( name, filename=filename, content=content,
+		mimetype=mimetype)
 
 	def dump( self, path, overwrite=True ):
 		"""Dumps the last retrieved data to the given file."""
@@ -440,7 +443,6 @@ class Session:
 			if not url.startswith("http"): url = "http://" + url
 		# And now we parse the url and update the session attributes
 		protocol, host, path, parameters, query, fragment =  urlparse.urlparse(url)
-		# print url, urlparse.urlparse(url)
 		if   protocol == "http": self._protocol  = HTTP
 		elif protocol == "https": self._protocol = HTTPS
 		if host: self._host =  host

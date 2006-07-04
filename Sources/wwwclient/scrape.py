@@ -666,7 +666,7 @@ class Scraper:
 	def links( self, html ):
 		"""Iterates through the links found in this document. This yields the
 		tag name and the href value."""
-		if not html: raise ScraperException("No data")
+		if not html: raise ScraperException("No data: " + repr(html))
 		for match in self.onRE(html, RE_HTMLLINK):
 			tag  = match.group()
 			tag  = tag[1:tag.find(" ")]
