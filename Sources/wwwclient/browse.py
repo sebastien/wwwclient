@@ -14,7 +14,7 @@
 import urlparse, urllib, mimetypes, re, os
 import client, curlclient, defaultclient
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 HTTP               = "http"
 HTTPS              = "https"
@@ -130,7 +130,8 @@ class Request:
 		else:
 			raise Exception("Expected file or content")
 
-	def __init__( self, method=GET, url="/", fields=None, attach=(), params=None, headers=None, data=None ):
+	def __init__( self, method=GET, url="/", fields=None, attach=(),
+	params=None, headers=None, data=None,  mimetype=None ):
 		self._method      = method.upper()
 		self._url         = url
 		self._params      = Pairs(params)
@@ -146,6 +147,8 @@ class Request:
 		if headers:
 			for h,v in headers.items():
 				self.header(h,v)
+		if mimetype:
+			self.header("Content-Type", mimetype)
 
 	def method( self ):
 		"""Returns the method for this request"""
@@ -341,6 +344,7 @@ class Session:
 		self._cookies         = Pairs()
 		self._userAgent       = "Mozilla/5.0 (X11; U; Linux i686; fr; rv:1.8.0.4) Gecko/20060608 Ubuntu/dapper-security"
 		self._maxTransactions = self.MAX_TRANSACTIONS
+		self._referer         = None
 		self.verbose          = verbose
 		self.MERGE_COOKIES    = True
 		if url: self.get(url)
@@ -377,10 +381,17 @@ class Session:
 		f.write(self.last().data())
 		f.close()
 
-	def referer( self ):
-		if not self.last(): return None
-		else: return self.last().url()
-
+	def referer( self, value=client ):
+		if value == client:
+			if self._referer:
+				res = self._referer
+				self._referer = None
+				return res
+			if not self.last(): return None
+			else: return self.last().url()
+		else:
+			self._referer = value
+	
 	def get( self, url="/", params=None, headers=None, follow=True, do=True ):
 		# TODO: Return data instead of session
 		url         = self.__processURL(url)
@@ -396,10 +407,11 @@ class Session:
 				transaction = self.get(transaction.redirect(), do=True)
 		return transaction
 
-	def post( self, url=None, params=None, data=None, fields=None, attach=None, headers=None, follow=True, do=True ):
+	def post( self, url=None, params=None, data=None, mimetype=None, fields=None, attach=None, headers=None, follow=True, do=True ):
 		url = self.__processURL(url)
 		request     = self._createRequest(
-			method=POST, url=url, fields=fields, params=params, attach=attach, data=data, headers=headers
+			method=POST, url=url, fields=fields, params=params, attach=attach,
+			data=data, mimetype=mimetype, headers=headers
 		)
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
@@ -460,7 +472,7 @@ class Session:
 	def _createRequest( self, **kwargs ):
 		request = Request(**kwargs)
 		last    = self.last()
-		if last: request.header("Referer", self.referer())
+		if self.referer(): request.header("Referer", self.referer())
 		return request
 
 	def __addTransaction( self, transaction ):

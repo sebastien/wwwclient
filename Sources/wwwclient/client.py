@@ -35,7 +35,8 @@ RE_SET_COOKIE      = re.compile("\s*Set-Cookie\s*:(.*)\r\n",        re.I|re.MULT
 RE_CHUNKED         = re.compile("\s*Transfer-Encoding\s*:\s*chunked\s*\r\n", re.I|re.MULTILINE)
 CRLF               = "\r\n"
 BOUNDARY           = '----------fbb6cc131b52e5a980ac702bedde498032a88158$'
-DEFAULT_MIMETYPE   = 'application/octet-stream'
+DEFAULT_MIMETYPE   = 'text/plain'
+DEFAULT_ATTACH_MIMETYPE = 'application/octet-stream'
 
 # NOTE: A useful reference for understanding HTTP is the following website
 # <http://www.jmarshall.com/easy/http>
@@ -123,7 +124,7 @@ class HTTPClient:
 					f     = file(filename, 'r')
 					value = f.read()
 					f.close()
-					mime_type = mimetypes.guess_type(filename)[0] or DEFAULT_MIMETYPE
+					mime_type = mimetypes.guess_type(filename)[0] or DEFAULT_ATTACH_MIMETYPE
 				elif atype == CONTENT_ATTACHMENT:
 					filename, mime_type, value = filename
 				content.append('Content-Disposition: form-data; name="%s"; filename="%s"' % (name, filename))
