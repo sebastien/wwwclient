@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 19-Jun-2006
-# Last mod  : 20-Jun-2006
+# Last mod  : 04-Jul-2006
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
@@ -114,11 +114,17 @@ class Request:
 	specify headers, cookies, data and attachments."""
 
 	@staticmethod
-	def makeAttachment( name, file=None, content=None ):
-		if file != None:
-			return (name, file, FILE_ATTACHMENT)
-		elif content != None:
-			return (name, content, CONTENT_ATTACHMENT)
+	def makeAttachment( name, filename=None, content=None,
+	mimeType=curl.DEFAULT_MIMETYPE ):
+		"""Creates an internal representation for an attachment, which is either
+		the given filename or the given content, filename and data"""
+		if content != None:
+			assert filename, "Filename is required when attaching content"
+			assert mimeType, "Mimetype is required when attaching content"
+			return (name, (filename, content, mimeType), CONTENT_ATTACHMENT)
+		elif file != None:
+			assert mimeType == curl.DEFAULT_MIMETYPE, "Mimetype is ignored when attaching file"
+			return (name, filename, FILE_ATTACHMENT)
 		else:
 			raise Exception("Expected file or content")
 
@@ -191,12 +197,12 @@ class Request:
 			self._method = POST
 			self._data   = data
 
-	def attach( self, name, file=None, content=None ):
+	def attach( self, name, filename=None, content=None ):
 		"""Attach the given file or content to the request. This will turn the
 		request into a post"""
 		assert self._data == None, "Request already has data"
 		self._method = POST
-		self._attachments.append(Request.makeAttachment(name, file=file,
+		self._attachments.append(Request.makeAttachment(name, filename=filename,
 		content=content))
 
 	def attachments( self ):
@@ -346,8 +352,8 @@ class Session:
 		if not self._transactions: return None
 		return self._transactions[-1]
 
-	def attach( self, name, file=None, content=None):
-		return Request.makeAttachment( name, file=file, content=content )
+	def attach( self, name, filename=None, content=None):
+		return Request.makeAttachment( name, filename=filename, content=content )
 
 	def dump( self, path, overwrite=True ):
 		"""Dumps the last retrieved data to the given file."""
@@ -364,7 +370,6 @@ class Session:
 				if v != None: base = base[:i]
 				path = base + "-" + str(count) + ext
 				count += 1
-		print "DUMPING", path
 		f = file(path, "w")
 		f.write(self.last().data())
 		f.close()

@@ -1,11 +1,13 @@
  version 0.5:
- - Charset support in curl module
  - Added HTML tree generation
- - HTML normalization through tree conversion
- - Split supports open tags without closing tags
- - Curl modules supports retries (when errors occur)
  - Added "fields" support
- - Improved form fields and actions handling
- - Preliminary documentation
- - Improved attachments support
+ - Added charset support in curl module
+ - Added HTML normalization through tree conversion
+ - Added preliminary documentation
+ - Added custom form-encoding method (without curl)
+ - Updated split to support open tags without closing tags
+ - Updated curl module to retry when error occurs
+ - Updated form fields and actions handling
+ - Updated attachments support
+ - Changed attach file parameter to filename
 

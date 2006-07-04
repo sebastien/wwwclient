@@ -6,10 +6,10 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 20-Jun-2006
-# Last mod  : 27-Jun-2006
+# Last mod  : 04-Jul-2006
 # -----------------------------------------------------------------------------
 
-import pycurl, re, time, urlparse, StringIO
+import pycurl, re, time, urlparse, mimetypes, StringIO
 
 # TODO: Find more use cases for chunked mode
 # TODO: Add cookie encode/decode functions
@@ -24,38 +24,51 @@ It features:
  - Provisional and final responses parsing
  - Cookies support
  - Redirect suport
+ - Encoding support for fields
+ - File upload support
  - Custom headers support
  - Custom request modification callback
+ - Custom form/data encoding function (when there are troubles with Curl)
 
-The basic usage is to instanciate a Transaction class, and then call GET and POST
+The basic usage is to instanciate a HTTClient class, and then call GET and POST
 methods on the instance. You can decide according to the various attributes what
 you want to do (follow redirection, process cookies, etc).
 
 Example:
 
-	from curl import Transaction
-	# Creates the transaction
-	t = Transaction()
+--
+	from curl import HTTPClient
+	# Creates the client
+	c = HTTPClient()
 	# Connects to google.com
-	t.GET("http://www.google.com")
+	c.GET("http://www.google.com")
 	# Follows redirections (if any)
-	while t.redirect(): t.GET(t.redirect())
+	while c.redirect(): c.GET(t.redirect())
 	# And eventually do the search query
-	print t.GET("search?hl=en&q=pycurl&btnG=&meta=")
-	print t.info()
+	print c.GET("search?hl=en&q=pycurl&btnG=&meta=")
+	print c.info()
+--
+
+This example is of course very basic, but it gives you the general feel about
+how to use it. When looking at the API take care of reading the docstring to
+know what kind of value is expected, as headers are expected to be a list of
+strings, and attachements are expected to be of a specific format (detailes in
+POST).
 
 """
 
 FILE_ATTACHMENT    = 0
 CONTENT_ATTACHMENT = 1
 
-RE_CONTENT_LENGTH  = re.compile("Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
-RE_CONTENT_TYPE    = re.compile("Content-Type\s*:\s*([0-9]+)",   re.I|re.MULTILINE)
-RE_CHARSET         = re.compile("charset=([\w\d_-]+)",           re.I|re.MULTILINE)
-RE_LOCATION        = re.compile("Location\s*:(.*)\r\n",          re.I|re.MULTILINE)
-RE_SET_COOKIE      = re.compile("Set-Cookie\s*:(.*)\r\n",        re.I|re.MULTILINE)
-RE_CHUNKED         = re.compile("Transfer-Encoding\s*:\s*chunked\s*\r\n", re.I|re.MULTILINE)
+RE_CONTENT_LENGTH  = re.compile("\s*Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
+RE_CONTENT_TYPE    = re.compile("\s*Content-Type\s*:\s*([0-9]+)",   re.I|re.MULTILINE)
+RE_CHARSET         = re.compile("\s*charset=([\w\d_-]+)",           re.I|re.MULTILINE)
+RE_LOCATION        = re.compile("\s*Location\s*:(.*)\r\n",          re.I|re.MULTILINE)
+RE_SET_COOKIE      = re.compile("\s*Set-Cookie\s*:(.*)\r\n",        re.I|re.MULTILINE)
+RE_CHUNKED         = re.compile("\s*Transfer-Encoding\s*:\s*chunked\s*\r\n", re.I|re.MULTILINE)
 CRLF               = "\r\n"
+BOUNDARY           = '----------fbb6cc131b52e5a980ac702bedde498032a88158$'
+DEFAULT_MIMETYPE   = 'application/octet-stream'
 
 # NOTE: A useful reference for understanding HTTP is the following website
 # <http://www.jmarshall.com/easy/http>
@@ -74,7 +87,7 @@ class HTTPClient:
 		self._redirect   = None
 		self._newCookies = None
 		self._responses  = None
-		self.verbose     = 0
+		self.verbose     = 2
 		self.encoding    = encoding
 		self.retryDelay  = 0.100
 		self.retryCount  = 5
@@ -135,49 +148,50 @@ class HTTPClient:
 		if follow and self.redirect(): self.follow()
 		return self.data()
 
-	def POST( self, url, data=None, fields=None, attach=None, headers=None, follow=False ):
+	def POST( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None, follow=False ):
 		"""Posts the given data (as urlencoded string), or fields as list of
 		(name, value) pairs and/or attachments as list of (name, value, type)
 		triples. Headers and follow attributes are the same as for the @GET
-		method."""
-		r, s = self._prepareRequest( url, headers )
-		# PyCurl offers three ways to do a post
-		r.setopt(pycurl.POST, 1)
-		if data != None:
+		method.
+		
+		The @attach parameter is quite special, as the value will depend on the
+		type: if type is @FILE_ATTACHMENT, then value is simply the path to the
+		file, but if the type is @CONTENT_ATTACHMENT, the value is expected to
+		be a triple (filename, mimetype, value).
+		"""
+		# If there is no data, we encode it using our custom encoding method
+		if data:
 			assert not fields, "Fields must be empty when data is provided"
 			assert not attach, "No attachment is allowed when data is provided"
-			r.setopt(pycurl.POSTFIELDS, data)
-		elif attach or fields:
-			# TODO: Handle multiple files
-			# TODO: Assert no field override
-			field_data = []
-			if fields:
-				for name, value in fields:
-					if   type(value) == unicode: value = value.encode(self.encoding)
-					elif value == None: value = ""
-					else: value = str(value)
-					field_data.append((name, (pycurl.FORM_CONTENTS, value)))
-			if attach:
-				for name, value, atype in attach:
-					if type(value) == unicode: value = value.encode(self.encoding)
-					elif value == None: value = ""
-					else: value = str(value)
-					if atype == FILE_ATTACHMENT:
-						field_data.append((name, (pycurl.FORM_FILE, value)))
-					elif atype == CONTENT_ATTACHMENT:
-						field_data.append((name, (pycurl.FORM_CONTENTS, value)))
-					else:
-						raise Exception("Unknown attachment type: %s" % (atype))
-			for field, value in field_data:
-				if field.startswith("__"): continue
-				print field, "==",value
-			r.setopt(pycurl.HTTPPOST, field_data)
-		else:
-			raise Exception("Post with no data")
+		if data == None:
+			assert mimetype == None, "Mimetype is ignored when no data is given."
+			data, mimetype = self.encodeMultipart(fields, attach)
+		# If there is a mimetype specified, we update the fields with the proper
+		# content-type
+		if mimetype:
+			if headers == None: headers = []
+			# TODO: Optimize this, it is kind of slow
+			headers = list(filter(lambda x: RE_CONTENT_TYPE.match(x) == None, headers))
+			headers.append("Content-Type: " + mimetype)
+		# We prepare the request
+		r, s = self._prepareRequest( url, headers )
+		# PyCurl offers three ways to do a POST
+		r.setopt(pycurl.POST, 1)
+		# If there is data, we attach it
+		if data != None: r.setopt(pycurl.POSTFIELDS, data)
 		# Now we can perform the request
 		self._performRequest()
 		if follow and self.redirect(): self.follow()
 		return self.data()
+
+	def _valueToString( self, value ):
+		"""Ensures that the given value will be an encoded string, encoded in
+		this HTTPClient default encoding (set it with the @encoding
+		attribute)."""
+		if   type(value) == unicode: value = value.encode(self.encoding)
+		elif value == None: value = ""
+		else: value = str(value)
+		return value
 
 	def _absoluteURL( self, url ):
 		"""Returns the absolute URL for the given url"""
@@ -314,6 +328,61 @@ class HTTPClient:
 			if not name: continue
 			res.append((name,value))
 		return res
+	
+	def encodeMultipart( self, fields=(), attach=() ):
+		"""Encodes the given fields and attachments (as given to POST) and
+		returns the request body and content type for sending the encoded
+		data.  This method can be used to bypass Curl own form encoding
+		techniques."""
+		content = []
+		for name, value in fields:
+			content.append("--" + BOUNDARY)
+			content.append('Content-Disposition: form-data; name="%s"' % name)
+			content.append('')
+			content.append(self._valueToString(value))
+		for name, filename, atype in attach:
+			content.append("--" + BOUNDARY)
+			if atype == FILE_ATTACHMENT:
+				f     = file(filename, 'r')
+				value = f.read()
+				f.close()
+				mime_type = mimetypes.guess_type(filename)[0] or DEFAULT_MIMETYPE
+			elif atype == CONTENT_ATTACHMENT:
+				filename, mime_type, value = filename
+			content.append('Content-Disposition: form-data; name="%s"; filename="%s"' % (name, filename))
+			content.append('Content-Type: %s' % (mime_type))
+			content.append('Content-Transfer-Encoding: binary')
+			content.append('')
+			content.append(self._valueToString(value))
+		content.append('--' + BOUNDARY + '--')
+		content.append('')
+		body         = CRLF.join(content)
+		content_type = 'multipart/form-data; boundary=%s' % BOUNDARY
+		return body, content_type
+
+	def encodeMultipartWithCurl(self, fields=(), attach=()):
+		"""This is an alternative implementation of the encoder using the Curl
+		back-end. This returns nothing, but modifies the current curl request
+		so that the fields and attachments are properly registered."""
+		# TODO: Handle multiple files
+		# TODO: Assert no field override
+		field_data = []
+		# Takes care of fields
+		for name, value in fields:
+			value = self._valueToString(value)
+			field_data.append((name, (pycurl.FORM_CONTENTS, value)))
+		# Takes care of attachments
+		for name, value, atype in attach:
+			value = self._valueToString(value)
+			if atype == FILE_ATTACHMENT:
+				field_data.append((name, (pycurl.FORM_FILE, value)))
+			elif atype == CONTENT_ATTACHMENT:
+				filename, mime_type, value = value
+				field_data.append((name, (pycurl.FORM_CONTENTS, value)))
+			else:
+				raise Exception("Unknown attachment type: %s" % (atype))
+		r.setopt(pycurl.HTTPPOST, field_data)
+		return None, None
 
 if __name__ == "__main__":
 	import os
