@@ -6,10 +6,21 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 19-Jun-2006
-# Last mod  : 22-Jun-2006
+# Last mod  : 18-Jul-2006
 # -----------------------------------------------------------------------------
 
+# TODO: The tree could be created by the iterate function, by directly linking
+# nodes. So the tree could be unfolded as a list, or kept folded as a tree. This
+# would allow to have still one structure. Ideally, the original HTML could be
+# kept to allow easy subset extraction (currently, the data is recreated)
+
 import re, string, htmlentitydefs
+
+__doc__ = """\
+The scraping module gives a set of functionalities to manipulate HTML data. All
+functions are text oriented, so that they work with any subset of an HTML
+document. This is very useful, as it does not require the HTML to be
+well-formed, and allows easy selection of HTML fragments."""
 
 RE_SPACES    = re.compile("\s+")
 RE_FORMDATA  = re.compile("<(form|input)", re.I)
@@ -39,6 +50,8 @@ KEEP_BELOW    = "-"
 # -----------------------------------------------------------------------------
 
 class Node:
+	"""The Node is an object that encapsulates an HTML element. Nodes are
+	created by functions which create a tree from a set of HTML text."""
 
 	TEXT = "#text"
 	ROOT = "#root"
@@ -495,12 +508,18 @@ class Form:
 		self.inputs = []
 		self.values = {}
 
+	def fieldNames( self ):
+		return self.fields(namesOnly=True)
+
 	def fields( self, namesOnly=False ):
 		"""Returns that list of inputs (or input names if namesOnly is True) that
 		can be assigned a value (checkboxes, inputs, text areas, etc)."""
 		res = filter(lambda f:f.get("type") != "submit", self.inputs)
 		if namesOnly: res = tuple(f.get("name") for f in res)
 		return res
+
+	def actionNames( self ):
+		return self.actions(namesOnly=True)
 
 	def actions( self, namesOnly=False ):
 		"""Returns the list of inputs (or input names if namesOnly is True) that

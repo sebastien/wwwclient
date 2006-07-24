@@ -12,7 +12,7 @@
 # TODO: Allow Request to have parameters in body or url and attachments as well
 
 import urlparse, urllib, mimetypes, re, os
-import client, curlclient, defaultclient
+import client, defaultclient
 
 __version__ = "2.1"
 
@@ -306,6 +306,9 @@ class Transaction:
 	
 	def done( self ):
 		return self._done
+	
+	def __str__( self ):
+		return self.data()
 
 # -----------------------------------------------------------------------------
 #
@@ -358,11 +361,14 @@ class Session:
 		if not self._transactions: return None
 		return self._transactions[-1]
 
+	def url( self ):
+		return self.last().url()
+
 	def attach( self, name, filename=None, content=None, mimetype=None ):
 		return Request.makeAttachment( name, filename=filename, content=content,
 		mimetype=mimetype)
 
-	def dump( self, path, overwrite=True ):
+	def dump( self, path, data=None, overwrite=True ):
 		"""Dumps the last retrieved data to the given file."""
 		count = 0
 		if not overwrite:
@@ -378,7 +384,7 @@ class Session:
 				path = base + "-" + str(count) + ext
 				count += 1
 		f = file(path, "w")
-		f.write(self.last().data())
+		f.write(data or self.last().data())
 		f.close()
 
 	def referer( self, value=client ):
