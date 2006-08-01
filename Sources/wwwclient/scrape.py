@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 19-Jun-2006
-# Last mod  : 18-Jul-2006
+# Last mod  : 01-Aug-2006
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -267,11 +267,33 @@ class HTMLTools:
 				res.append(html[tag[START]:tag[END]])
 		return "".join(res)
 
+	def textcut( self, text, cutfrom=None, cutto=None ):
+		"""Cuts the text from the given marker, to the given marker."""
+		if cutfrom: start = text.find(cutfrom)
+		else: start = 0
+		if cutto: end = text.find(cutto)
+		else: end = -1
+		if start == -1: start = 0
+		elif cutfrom: start += len(cutfrom)
+		return text[start:end]
+
+	def textlines( self, text, strip=True, empty=False ):
+		"""Returns a list of lines for the given HTML text. Lines are stripped
+		and empty lines are filtered out by default."""
+		lines = text.split("\n")
+		if strip: lines = map(string.strip, lines)
+		if not empty: lines = filter(lambda x:x, lines)
+		return lines
+
 	def cut( self, html, level=None, tags=None, text=True, method=KEEP_ABOVE ):
+		"""Cuts the given HTML data so that only tags above the given level will
+		be preserved. You can use different methods (KEEP_ABOVE, KEEP_BELOW,
+		KEEP_SAME) to tell what tags you would like to keep."""
 		last_level = 0
 		parents    = []
 		if tags: tags = map(string.lower, tags)
 		for tag in self.iterate(html):
+			# If this is a text node
 			if type(tag) not in (list, tuple):
 				if level != None:
 					if last_level + 1 == level and method.find(KEEP_SAME)==-1: continue
@@ -279,6 +301,7 @@ class HTMLTools:
 					if last_level + 1 >  level and method.find(KEEP_ABOVE)==-1: continue
 				if tags and not filter(lambda t:t in parents, tags): continue
 				if text: yield tag
+			# If this is an element node
 			else:
 				# We set the parents right
 				while len(parents) != tag[LEVEL]: parents.pop()
@@ -288,13 +311,14 @@ class HTMLTools:
 					if tag[LEVEL] == level and method.find(KEEP_SAME)==-1: continue
 					if tag[LEVEL] <  level and method.find(KEEP_BELOW)==-1: continue
 					if tag[LEVEL] >  level and method.find(KEEP_ABOVE)==-1: continue
+				# FIXME: Shouln't it be lambda t:t in tags, parents
 				if tags and not filter(lambda t:t in parents, tags): continue
 				yield tag
 
 	def split( self, html, level=None, strip=None, tagOnly=False, contentOnly=False, tags=None ):
 		"""Splits the given html according to the given tag. For instance,
-		slicing an html document according to divs will return a list of blocks of
-		text beginning and ending with divs (excepted the leading and trailing
+		splitting an HTML document according to DIVs will return a list of blocks of
+		text beginning and ending with DIVs (excepted the leading and trailing
 		blocks)."""
 		assert not tagOnly == contentOnly == True
 		off       = 0
@@ -331,8 +355,9 @@ class HTMLTools:
 		return None
 
 	def levels( self, html, tags ):
-		"""Return the levels at which the given tags can be
-		encountered."""
+		"""Return the levels at which the given tags can be encountered. The
+		tags must a be  a list of strings. The tag names are matched in a
+		case-insensitive fashion"""
 		if type(tags) in (str, unicode): tag = (tags,)
 		levels = []
 		for tag in self.iterate(html):
@@ -352,7 +377,7 @@ class HTMLTools:
 		if expand: res = self.expand(res)
 		if norm: res = self.norm(res)
 		return res
-	
+
 	def expand( self, text ):
 		"""Expands the entities found in the given text."""
 		# NOTE: This is based on
@@ -421,7 +446,76 @@ class HTMLTools:
 					parents[-1].append(node)
 					parents.append(node)
 		return root
-	
+
+	def forms( self, html ):
+		"""Will extract the forms from the HTML document in a way that tolerates
+		inputs outside of forms (this happens sometime). This function is very
+		fast, because it only uses regexes to search for tags within the
+		document, so there is no need to parse the HTML."""
+		if not html: raise Exception("No data")
+		i       = 0
+		end     = len(html)
+		matches = []
+		# We get all the form data
+		while i < end:
+			match = RE_FORMDATA.search(html, i)
+			if not match: break
+			matches.append(match)
+			i = match.end()
+		# And we create the forms tree
+		current_form  = None
+		forms         = {}
+		default_count = 0
+		for match in matches:
+			tag_end    = html.find(">", match.end())
+			name       = match.group(1).lower()
+			attributes = HTML.parseAttributes(html[match.end():tag_end].strip())
+			if name == "form":
+				form_name = attributes.get("name")
+				if not form_name:
+					form_name = "default%s" % ( default_count )
+					default_count += 1
+				current_form = Form(form_name, attributes.get("action"))
+				forms[current_form.name] = current_form
+			elif name == "input":
+				assert current_form
+				# TODO: Make this nicer
+				js = filter(lambda s:s[0].startswith("on"), attributes.items())
+				# FIXME: Adda a warnings interface
+				#if js:
+				#	print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
+				current_form.inputs.append(attributes)
+			else:
+				raise Exception("Unexpected tag: " + name)
+		# Prefills the forms
+		for form in forms.values():
+			form._prefill()
+		return forms
+
+	def links( self, html, like=None ):
+		"""Iterates through the links found in this document. This yields the
+		tag name and the href value."""
+		if not html: raise Exception("No data: " + repr(html))
+		if like != None:
+			if type(like) in (str,unicode): like = re.compile(like)
+		for match in self.onRE(html, RE_HTMLLINK):
+			tag  = match.group()
+			tag  = tag[1:tag.find(" ")]
+			href = match.group(2)
+			if href[0] in ("'", '"'): href = href[1:-1]
+			if not like or like.match(href):
+				yield tag, href
+
+	@staticmethod
+	def onRE( text, regexp, off=0 ):
+		"""Itearates through the matches for the given regular expression."""
+		res = True
+		while res:
+			res = regexp.search(text, off)
+			if res:
+				off = res.end()
+				yield res
+
 	@staticmethod
 	def norm( text ):
 		return RE_SPACES.sub(" ", text).strip()
@@ -627,83 +721,5 @@ class Form:
 
 	def __repr__( self ):
 		return "Form '%s'->%s: %s" % (self.name, self.action, repr(self.inputs))
-
-# -----------------------------------------------------------------------------
-#
-# SCRAPER
-#
-# -----------------------------------------------------------------------------
-
-class ScraperException(Exception): pass
-class Scraper:
-	
-	def forms( self, html ):
-		"""Will extract the forms from the HTML document in a way that tolerates
-		inputs outside of forms (this happens sometime). This function is very
-		fast, because it only uses regexes to search for tags within the
-		document, so there is no need to parse the HTML."""
-		if not html: raise ScraperException("No data")
-		i       = 0
-		end     = len(html)
-		matches = []
-		# We get all the form data
-		while i < end:
-			match = RE_FORMDATA.search(html, i)
-			if not match: break
-			matches.append(match)
-			i = match.end()
-		# And we create the forms tree
-		current_form  = None
-		forms         = {}
-		default_count = 0
-		for match in matches:
-			tag_end    = html.find(">", match.end())
-			name       = match.group(1).lower()
-			attributes = HTML.parseAttributes(html[match.end():tag_end].strip())
-			if name == "form":
-				form_name = attributes.get("name")
-				if not form_name:
-					form_name = "default%s" % ( default_count )
-					default_count += 1
-				current_form = Form(form_name, attributes.get("action"))
-				forms[current_form.name] = current_form
-			elif name == "input":
-				assert current_form
-				# TODO: Make this nicer
-				js = filter(lambda s:s[0].startswith("on"), attributes.items())
-				# FIXME: Adda a warnings interface
-				#if js:
-				#	print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
-				current_form.inputs.append(attributes)
-			else:
-				raise Exception("Unexpected tag: " + name)
-		# Prefills the forms
-		for form in forms.values():
-			form._prefill()
-		return forms
-
-	def links( self, html ):
-		"""Iterates through the links found in this document. This yields the
-		tag name and the href value."""
-		if not html: raise ScraperException("No data: " + repr(html))
-		for match in self.onRE(html, RE_HTMLLINK):
-			tag  = match.group()
-			tag  = tag[1:tag.find(" ")]
-			href = match.group(2)
-			if href[0] in ("'", '"'): href = href[1:-1]
-			yield tag, href
-
-	@staticmethod
-	def onRE( text, regexp, off=0 ):
-		"""Itearates through the matches for the given regular expression."""
-		res = True
-		while res:
-			res = regexp.search(text, off)
-			if res:
-				off = res.end()
-				yield res
-
-# The default scraper
-scraper = Scraper()
 
 # EOF

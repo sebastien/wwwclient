@@ -397,7 +397,7 @@ class Session:
 			else: return self.last().url()
 		else:
 			self._referer = value
-	
+
 	def get( self, url="/", params=None, headers=None, follow=True, do=True ):
 		# TODO: Return data instead of session
 		url         = self.__processURL(url)

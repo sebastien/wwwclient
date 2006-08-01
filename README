@@ -1,5 +1,5 @@
 == WWWClient
--- Advanced web browsing, scraping and automation
+== Advanced web browsing, scraping and automation
 -- Author: Sébastien Pierre, XPrima
 -- Date: 27-Jun-2006
 
@@ -12,21 +12,21 @@ Browsing
 Concepts
 --------
 
-Session, transaction, request, response
-Cookies
+    Session, transaction, request, response
+    Cookies
 
 Accessing a website
 -------------------
 
-Initiate a session
+    Initiate a session
 
 
 Posting data 
 ------------
 
-There are different ways to communicate data to an HTTP server. WWWClient
-browsing API offers different ways of doing so, depending on the type of HTTP
-request you want to issue:
+    There are different ways to communicate data to an HTTP server. WWWClient
+    browsing API offers different ways of doing so, depending on the type of HTTP
+    request you want to issue:
 
     1) Posting with GET and values as parameters::
        |
@@ -65,17 +65,74 @@ request you want to issue:
 Scraping
 ========
 
-Getting important data
-----------------------
+Analysing the structure of HTML
+-------------------------------
 
-    1) Forms::
-    2) Links::
+    tree::
+
+    levelof::
+
+    level::
+
+
+Getting to the desired data
+---------------------------
+
+    split::
+
+    cut::
+
+Web automation
+--------------
+
+    forms::
+
+    links::
+
+Removing HTML data
+------------------
+
+    expand::
+
+    text::
+
+Further text processing
+-----------------------
+
+    textcut::
+
+    textlines::
 
 Detecting changes
 -----------------
 
     1) Specify which elements should be tracked
     2) Compute the "tag" for the set of elements
+
+The HTMLNode object
+-------------------
+
+Tips
+----
+
+    1) Split your HTML into sections::
+
+       Most HTML documents consist of different parts: headers, footers,
+       navigation section, advertising, legal info, and actual content. It will
+       be easier for you if you start by cutting and splitting your HTML
+       document, getting rid of what you don't need and keeping what you are
+       looking for.
+
+    2) Get rid of HTML when you don't need structure::
+
+       Manipulating HTML data can be difficult, especially when the document is
+       not really well-formed. For instance, if you are scraping a document with
+       table-formatted data, it may be complex to access the elements you need.
+
+       In this case, it may be a better option to cut and split your HTML so
+       that you have you ''sections of data'' at hand, and then convert them to
+       text using `HTML.text(HTML.expand(html))`, and simply process the rest
+       with the scraper module text processing tools or Python regular ones.
 
 
 Text encoding support
