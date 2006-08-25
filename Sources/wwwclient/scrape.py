@@ -467,7 +467,10 @@ class HTMLTools:
 		forms         = {}
 		default_count = 0
 		for match in matches:
+			# We get the end of the tag, which may be with or without a trailing
+			# /
 			tag_end    = html.find(">", match.end())
+			if html[tag_end-1] == "/": tag_end -=1
 			name       = match.group(1).lower()
 			attributes = HTML.parseAttributes(html[match.end():tag_end].strip())
 			if name == "form":
@@ -475,8 +478,12 @@ class HTMLTools:
 				if not form_name:
 					form_name = "default%s" % ( default_count )
 					default_count += 1
-				current_form = Form(form_name, attributes.get("action"))
-				forms[current_form.name] = current_form
+				# We do not replace an existing frame (which may happen if there
+				# is two <form name='...> with the same name (yes, this can
+				# happen !)
+				if not forms.has_key(form_name):
+					current_form = Form(form_name, attributes.get("action"))
+					forms[current_form.name] = current_form
 			elif name == "input":
 				assert current_form
 				# TODO: Make this nicer
@@ -602,23 +609,23 @@ class Form:
 		self.inputs = []
 		self.values = {}
 
-	def fieldNames( self ):
-		return self.fields(namesOnly=True)
-
-	def fields( self, namesOnly=False ):
+	def fields( self, namelike=None, namesOnly=False ):
 		"""Returns that list of inputs (or input names if namesOnly is True) that
 		can be assigned a value (checkboxes, inputs, text areas, etc)."""
 		res = filter(lambda f:f.get("type") != "submit", self.inputs)
+		if namelike:
+			namelike = re.compile(namelike)
+			res = filter(lambda f:namelike.match(f.get("name")), res)
 		if namesOnly: res = tuple(f.get("name") for f in res)
 		return res
 
-	def actionNames( self ):
-		return self.actions(namesOnly=True)
-
-	def actions( self, namesOnly=False ):
+	def actions( self, namelike=None, namesOnly=False ):
 		"""Returns the list of inputs (or input names if namesOnly is True) that
 		correspond to form action buttons."""
 		res = filter(lambda f:f.get("type")=="submit", self.inputs)
+		if namelike:
+			if namelike in (str,unicode): namelike = re.compile(namelike)
+			res = filter(lambda f:namelike.match(f.get("name")), res)
 		if namesOnly: res = tuple(f.get("name") for f in res)
 		return res
 
@@ -652,7 +659,14 @@ class Form:
 		return res
 
 	def submit( self, action=None, encoding="latin-1", strip=True, **values ):
-		"""Submits this form with the given action and given values."""
+		"""Submits this form with the given action and given values. This
+		basically takes all the default values set within this form, updates
+		them with the given values (given as keywords), and returns a list of
+		(key, value) pairs that represent the parameters that should be encoded
+		in the response.
+		
+		In this repsect, the submit method does not do the actual submission,
+		but rather prepares the data for submission."""
 		self.fill(**values)
 		parameters  = []
 		# We get the field and action names
@@ -672,8 +686,8 @@ class Form:
 				parameters.append((key, value))
 		if action:
 			if action not in self.actions(namesOnly=True):
-				raise FormException("Action not available: %s, in form %s" %
-				(action, self.name))
+				raise FormException("Action not available: %s, in form %s: choose from %s" %
+				(action, self.name, self.actions(namesOnly=True)))
 			parameters.append((action, self.values.get(action)))
 		return parameters
 
@@ -685,6 +699,8 @@ class Form:
 			if name and value: self.values[name] = value
 	
 	def asText( self ):
+		"""Returns a pretty-printed text representation of this form. This
+		representation is very useful when it comes to analysing web pages."""
 		# TODO: Rewrite Form.asText, it is ugly.
 		cut     = 20
 		res     = "FORM: %s (%s)\n" % (self.name, self.action)

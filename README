@@ -62,6 +62,30 @@ Posting data
        >    Content-Length: 10
        >    name=value
 
+Submitting forms
+----------------
+
+    You can get the forms in the current session by invoking:
+
+    >   session.last().forms()
+
+    Which will return you a `dict` with form names as key and @scrape.Form as
+    values. Each form can be easily manipulated using the following methods:
+
+    >   form.fields()
+
+    will return you a list of dictionaries representing the `input` elements
+    constituting the form. You can change directly the field values if you want.
+
+    >   form.actions()
+
+    will return you a list of actions (the `submit` elements`) that you can
+    trigger when submitting the form.
+    
+    You can set field values using...
+
+    - For _checkboxes_, the values are either `on` (enable) or `off` (disabled)
+
 Scraping
 ========
 

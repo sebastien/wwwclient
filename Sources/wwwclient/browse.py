@@ -6,15 +6,15 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 19-Jun-2006
-# Last mod  : 04-Jul-2006
+# Last mod  : 25-Aug-2006
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
 
 import urlparse, urllib, mimetypes, re, os
-import client, defaultclient
+import client, defaultclient, scrape
 
-__version__ = "2.1"
+__version__ = "2.2"
 
 HTTP               = "http"
 HTTPS              = "https"
@@ -253,6 +253,11 @@ class Transaction:
 		"""Returns this transaction cookies (including the new cookies, if the
 		transaction is set to merge cookies)"""
 		return self._cookies
+	
+	def forms( self ):
+		"""Returns a dictionary with the forms contained in the response."""
+		assert self._done
+		return scrape.forms(self.data())
 
 	def data( self ):
 		"""Returns the response data (implies that the transaction was
@@ -438,6 +443,11 @@ class Session:
 		and gives its values as parameters to the post method."""
 		# We fill the form values
 		# And we submit the form
+		if type(form) in (unicode, str):
+			forms = scrape.HTML.forms(self.last().data())
+			if not forms.has_key(form):
+				raise SessionException("Form not available: " + form)
+			form = forms[form]
 		url    = form.action or self.referer()
 		fields = form.submit(action=action, **values)
 		# FIXME: Manage encodings consistently
