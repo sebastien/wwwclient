@@ -23,7 +23,7 @@ document. This is very useful, as it does not require the HTML to be
 well-formed, and allows easy selection of HTML fragments."""
 
 RE_SPACES    = re.compile("\s+")
-RE_FORMDATA  = re.compile("<(form|input)", re.I)
+RE_FORMDATA  = re.compile("<(form|input|select|option|textarea)", re.I)
 RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
 RE_HTMLLINK  = re.compile("<[^<]+(href|src)\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
@@ -451,7 +451,10 @@ class HTMLTools:
 		"""Will extract the forms from the HTML document in a way that tolerates
 		inputs outside of forms (this happens sometime). This function is very
 		fast, because it only uses regexes to search for tags within the
-		document, so there is no need to parse the HTML."""
+		document, so there is no need to parse the HTML.
+		
+		Currently form inputs, select and option are supported.
+		"""
 		if not html: raise Exception("No data")
 		i       = 0
 		end     = len(html)
@@ -463,9 +466,10 @@ class HTMLTools:
 			matches.append(match)
 			i = match.end()
 		# And we create the forms tree
-		current_form  = None
-		forms         = {}
-		default_count = 0
+		current_form   = None
+		current_select = None
+		forms          = {}
+		default_count  = 0
 		for match in matches:
 			# We get the end of the tag, which may be with or without a trailing
 			# /
@@ -482,7 +486,7 @@ class HTMLTools:
 				# is two <form name='...> with the same name (yes, this can
 				# happen !)
 				if not forms.has_key(form_name):
-					current_form = Form(form_name, attributes.get("action"))
+					current_form = Form(form_name, HTML.expand(attributes.get("action")))
 					forms[current_form.name] = current_form
 			elif name == "input":
 				assert current_form
@@ -491,6 +495,29 @@ class HTMLTools:
 				# FIXME: Adda a warnings interface
 				#if js:
 				#	print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
+				current_form.inputs.append(attributes)
+			elif name == "select":
+				assert current_form
+				current_select = attributes
+				current_select["type"] = "select"
+				current_form.inputs.append(current_select)
+			elif name == "option":
+				assert current_form
+				assert current_select
+				selected = attributes.get("selected") or ""
+				if current_select == None:
+				#	print "Warning: Option outside of select: ", current_form.name
+					continue
+				if selected.lower() == "selected":
+					current_select["value"] = attributes["value"]
+				else:
+					# TODO: We ignore them for now
+					pass
+			elif name == "textarea":
+				text_end = html.find("</textarea", match.end())
+				text = html[tag_end+1:text_end]
+				attributes["type"] = "textarea"
+				attributes["value"] = text
 				current_form.inputs.append(attributes)
 			else:
 				raise Exception("Unexpected tag: " + name)
@@ -599,7 +626,20 @@ class FormException(Exception): pass
 class Form:
 	"""A simple interface to forms, returned by the scraper. Forms can be easily
 	filled and their values (@values) can be given as parameters to the @browse
-	module."""
+	module.
+	
+	A form has:
+
+	- a _single action_
+	- a _list of inputs_ which are dicts of equivalent HTML element attributes.
+	  For elements such as `select` or `textarea`, the input `type` property is
+	  set to the actual element type.
+	- a _list of values_ which will be associated with values when filling the
+	  form.
+	
+	Form values are cleanly separated from their inputs, so that you can simply
+	clear the values to resubmit the form.
+	"""
 
 # TODO: Add STRICT mode for form that checks possible values/action/field names
 
@@ -640,6 +680,17 @@ class Form:
 		field_names = map(lambda f:f.get("name"), self.fields())
 		for name, value in values.items():
 			self.values[name] = value
+	
+	def set( self, name, value ):
+		"""Sets the given form value. This modified the values within the form,
+		and not the fields directly."""
+		self.values[name] = value
+
+	def unset( self, name ):
+		"""This unsets the given value from this form values. The effect will be
+		that that the named input default value will be used instead of a
+		user-provided one."""
+		del self.values[name]
 
 	def parameters( self ):
 		"""Returns a list of (key,value) respecting the original input order."""
@@ -658,26 +709,31 @@ class Form:
 				res.append((key, value))
 		return res
 
-	def submit( self, action=None, encoding="latin-1", strip=True, **values ):
+	def submit( self, action=None, encoding="latin-1", strip=False, **values ):
 		"""Submits this form with the given action and given values. This
-		basically takes all the default values set within this form, updates
-		them with the given values (given as keywords), and returns a list of
+		basically takes all the default values set within this form, replacing
+		them with the set or given values (given as keywords), and returns a list of
 		(key, value) pairs that represent the parameters that should be encoded
 		in the response.
 		
 		In this repsect, the submit method does not do the actual submission,
-		but rather prepares the data for submission."""
+		but rather prepares the data for submission.
+
+		Also, note that _submission does not mutate the form_, it simply creates
+		a list of parameters suitable for creating the body of a post request.
+		"""
 		self.fill(**values)
 		parameters  = []
 		# We get the field and action names
-		field_names  = self.fields(namesOnly=True)
+		field_names  = []
 		# We fill values that were initialized
-		for key in field_names:
-			value = self.values.get(key)
+		for field in self.fields():
+			key = field.get("name")
+			field_names.append(key)
+			value = self.values.get(key) or field.get("value") or ""
 			if strip and not value: continue
 			if type(value) == unicode: value = unicode(value).encode(encoding)
-			if self.values.has_key(key):
-				parameters.append((key, value))
+			parameters.append((key, value))
 		# And add values that do not correspond to any field
 		for key, value in values.items():
 			if key not in field_names:

@@ -257,7 +257,7 @@ class Transaction:
 	def forms( self ):
 		"""Returns a dictionary with the forms contained in the response."""
 		assert self._done
-		return scrape.forms(self.data())
+		return scrape.HTML.forms(self.data())
 
 	def data( self ):
 		"""Returns the response data (implies that the transaction was
