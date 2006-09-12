@@ -14,8 +14,6 @@
 import urlparse, urllib, mimetypes, re, os
 import client, defaultclient, scrape
 
-__version__ = "2.2"
-
 HTTP               = "http"
 HTTPS              = "https"
 PROTOCOLS          = (HTTP, HTTPS)
@@ -341,6 +339,8 @@ class Session:
 	"""
 
 	MAX_TRANSACTIONS = 10
+	DEFAULT_RETRIES  = 5
+	DEFAULT_DELAY    = 1
 
 	def __init__( self, url=None, verbose=False ):
 		"""Creates a new session at the given host, and for the given
@@ -365,6 +365,9 @@ class Session:
 		transaction in the session."""
 		if not self._transactions: return None
 		return self._transactions[-1]
+
+	def page( self ):
+		return self.last().data()
 
 	def url( self ):
 		return self.last().url()
@@ -434,7 +437,7 @@ class Session:
 				transaction = self.get(transaction.redirect(), do=True)
 		return transaction
 	
-	def submit( self, form, values={}, attach=[], action=None,  method=POST, do=True ):
+	def submit( self, form, values={}, attach=[], action=None,  method=POST, do=True, strip=True ):
 		"""Submits the given form with the current values and action (first
 		action by default) to the form action url, and doing
 		a POST or GET with the resulting values (POST by default).
@@ -449,7 +452,7 @@ class Session:
 				raise SessionException("Form not available: " + form)
 			form = forms[form]
 		url    = form.action or self.referer()
-		fields = form.submit(action=action, **values)
+		fields = form.submit(action=action, strip=strip, **values)
 		# FIXME: Manage encodings consistently
 		if method == POST or attach:
 			return self.post( url, fields=fields, attach=attach, do=do )
@@ -457,6 +460,23 @@ class Session:
 			return self.get( url,  params=fields, do=do )
 		else:
 			raise SessionException("Unsupported method for submit: " + method)
+
+	def ensure(self, expects, action, args=(), kwargs={}, retry=None, delay=None ):
+		"""Ensures that the given action (it should be a session instance
+		method), executed with the given args complies with the `expect`
+		predicate, which will be given his session. You can specify a number of
+		retries (maxed to 10), and a delay (in seconds) before each retry.
+		
+		When finished, this function returns True if it suceeded, or False if
+		the retries failed."""
+		retry = retry or self.DEFAULT_RETRIES
+		if delay == None: delay = self.DEFAULT_DELAY
+		res = expects(action(*args,**kwargs))
+		while not res and retry:
+			res = expects(action(*args,**kwargs))
+			time.sleep(delay)
+			retry -= 1
+		return res
 
 	def __processURL( self, url ):
 		"""Processes the given URL, by storing the host and protocol, and

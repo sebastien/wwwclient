@@ -1,7 +1,7 @@
 == WWWClient
 == Advanced web browsing, scraping and automation
--- Author: Sébastien Pierre, XPrima
--- Date: 27-Jun-2006
+-- Author: Sébastien Pierre, XPrima.com
+-- Date: 12-Sep-2006
 
 About
 =====
@@ -74,17 +74,49 @@ Submitting forms
 
     >   form.fields()
 
-    will return you a list of dictionaries representing the `input` elements
-    constituting the form. You can change directly the field values if you want.
+    will return you a list of dictionaries representing the input elements
+    constituting the form (that is `input`, `select`, `textarea`). Each dict
+    contains the attributes of the HTML element. For select and textarea, the
+    `type` and `value` attributes are set to the current value (selected option
+    or text area content).
+
+    >   print form.fields()[0]
+    >   {'name':'user', 'type':'text', value:''}
+
+    You may be tempted to change the value of a field directly, but you should
+    _use the set() method instead_ :
+
+    >   form.set('user', ...)
+
+    this is a better option, because changing the field value attribute will
+    overwrite the default form value, while using the `set()` method will
+    indicate that you specified a custom value for the field (which can be later
+    cleared, so that the form object can be reused)
+    
+    Note________________________________________________________________________
+    If you set values for  _checkboxes_, they will be converted to
+    `on` or `off`, unless their value is None, in which case they will be
+    considered as undefined
+    __________________________________________________________________________
+
+    Aside from fields, you can have a list of the form `actions`, which are
+    actually the inputs with `type=submit`.
 
     >   form.actions()
 
     will return you a list of actions (the `submit` elements`) that you can
     trigger when submitting the form.
     
-    You can set field values using...
 
-    - For _checkboxes_, the values are either `on` (enable) or `off` (disabled)
+    Note______________________________________________________________________
+
+    When _submitting forms_, you can specify whether you want _fields with no
+    values_ to be _stripped_ or not. Depending on how the server is implemented,
+    this may cause your request to be incorrectly processed or not.
+    
+    If your request fails to be processed properly, try changing the value of
+    the `strip` parameter in form submission methods.
+    __________________________________________________________________________
 
 Scraping
 ========

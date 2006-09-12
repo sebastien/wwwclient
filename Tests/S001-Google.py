@@ -1,22 +1,24 @@
 #!/usr/bin/env python
-# Encoding: iso-8859-1
 # vim: tw=80 ts=4 sw=4 noet
 from os.path import join, basename, dirname, abspath
-import sys ; sys.path.append(join(dirname(dirname(abspath(__file__))), "Sources"))
-
+import _import
 from wwwclient import browse, scrape
+HTML = scrape.HTML
 
-scraper = scrape.Scraper()
-session = browse.Session()
-session.verbose = True
-session.get("www.google.com/")
+session  = browse.Session("www.google.com/")
+page     = session.page()
+forms    = HTML.forms(page)
 
-search_form = scraper.forms(session.last().data()).values()[0]
-session.submit( search_form, values={"q":"Britney Spears"}, action="btnG",
-method=browse.GET ).data()
+search_form = forms["f"]
+search_form.fill( q="Britney Spears" )
+session.submit(search_form, action="btnG", method="GET")
+page = session.page()
+
+print page
+print HTML.parse(page)
 
 # Google results are not properly closed, so we had to identify patterns where
 # there were  a closing tag should be inserted
-close_on = ("td", "a", "img", "br", "a")
-scrape.do(scrape.HTML.iterate, session.last().data(), closeOn=close_on, write=sys.stdout)
+# close_on = ("td", "a", "img", "br", "a")
+# scrape.do(scrape.HTML.iterate, session.last().data(), closeOn=close_on, write=sys.stdout)
 # EOF

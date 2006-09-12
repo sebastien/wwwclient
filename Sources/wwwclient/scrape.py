@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 19-Jun-2006
-# Last mod  : 01-Aug-2006
+# Last mod  : 12-Sep-2006
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -15,6 +15,7 @@
 # kept to allow easy subset extraction (currently, the data is recreated)
 
 import re, string, htmlentitydefs
+import form
 
 __doc__ = """\
 The scraping module gives a set of functionalities to manipulate HTML data. All
@@ -23,7 +24,6 @@ document. This is very useful, as it does not require the HTML to be
 well-formed, and allows easy selection of HTML fragments."""
 
 RE_SPACES    = re.compile("\s+")
-RE_FORMDATA  = re.compile("<(form|input|select|option|textarea)", re.I)
 RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
 RE_HTMLLINK  = re.compile("<[^<]+(href|src)\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
@@ -34,121 +34,365 @@ RE_HTMLHREF  = re.compile("href\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
 
 RE_SPACES    = re.compile("\s+", re.MULTILINE)
 
-HTML_OPEN    = "<tag>"
-HTML_CLOSE   = "</tag>"
-HTML_SINGLE  = "<tag />"
-
 KEEP_ABOVE    = "+"
 KEEP_SAME     = "="
 KEEP_BELOW    = "-"
 
-
 # -----------------------------------------------------------------------------
 #
-# HTML TREE
+# HTML TAG INTERFACE
 #
 # -----------------------------------------------------------------------------
 
-class Node:
-	"""The Node is an object that encapsulates an HTML element. Nodes are
-	created by functions which create a tree from a set of HTML text."""
+class Tag:
+	"""A Tag is an abstract decorator for a portion within a string. Tags are
+	used in this module to identify HTML/XML data within strings."""
+	OPEN  = "open"
+	CLOSE = "close"
+	EMPTY = "empty"
 
-	TEXT = "#text"
-	ROOT = "#root"
+	def __init__( self, html, start, end ):
+		"""Creates a new new tag."""
+		self._html  = html
+		self.start  = start
+		self.end    = end
 
-	def __init__( self, name="#text", attributes=None, parent=None,
-	children=None, text=None, html=None, indice=None ):
-		if attributes == None: attributes = {}
-		if children   == None: childrent  = []
-		self.name       = name
-		self.attributes = attributes
-		self.children   = children
-		self.parent     = parent
-		self.text       = text
-		self.indice     = indice
+	def html( self ):
+		"""Returns the HTML representation of this tag."""
+		return self._html[self.start:self.end]
+		
+	def __repr__( self ):
+		return repr(self._html[self.start:self.end])
 
-	def append( self, child ):
-		if self.children == None: self.children = []
-		self.children.append(child)
+class ElementTag(Tag):
 
-	def match( self, name=None, names=None, attributes={} ):
-		"""Matches the given name agains the given criteria"""
-		# We ensure the names
-		if name:
-			if not names: names = []
-			if type(names) != list: names = list(names)
-			names.append(name)
-		# We try to match the node name
-		if names and not self.name in names: return False
-		# We try to match for attributes
-		if attributes and not self.attributes: return False
-		for attr, val in attributes.items():
-			this_val = self.attributes.get(attr)
-			if val != None and this_val != val: return False
-		return True
+	def __init__( self, html, name, start, end, astart=None, aend=None, attributes=None,
+	level=None, type=None ):
+		Tag.__init__(self, html, start, end)
+		if type == None: type = Tag.OPEN
+		self._attributes = attributes
+		self.astart      = astart
+		self.aend        = aend
+		self.level       = level
+		self.type        = type
+
+	def attributes( self ):
+		if self._attributes == None:
+			self._attributes = HTML.parseAttributes(self._html[self.astart:self.aend].strip())
+		return self._attributes
 	
-	def filter( self, name=None, names=None, attributes={} ):
-		"""Iterates through the direct children that match the given
-		criteria."""
-		if self.children:
-			for c in self.children:
-				if c.match(name=name, names=names, attributes=attributes):
-					yield c
+	def has( self, name ):
+		return self.attributes().has_key(name)
 
-	def html(self, norm=False):
-		if self.name == Node.TEXT:
-			return RE_SPACES.sub(" ",self.text)
-		if self.name == Node.ROOT:
-			return "".join((c.html() for c in self.children))
+	def get( self, name ):
+		return self.attributes().get(name)
+
+	def name( self ):
+		if self.type == Tag.OPEN or self.type == Tag.EMPTY:
+			return self._html[self.start+1:self.astart].strip()
 		else:
-			html_attributes = []
-			if self.attributes:
-				for a,v in self.attributes.items():
-					if v == None:
-						html_attributes.append(a)
-					else:
-						if   v.find('"') == -1: v = '"%s"' % (v)
-						else: v = "'%s'" % (v)
-						html_attributes.append("%s=%s" % (a,v))
-			html_attributes = " ".join(html_attributes)
-			if not self.children:
-				return  "<%s %s/>" % (self.name, html_attributes)
+			return self._html[self.start+2:self.astart].strip()
+
+	def nameLike( self, what ):
+		"""Tells if the name is like the given string/list of string/regexp/list
+		of regexpes."""
+		if type(what) in (str, unicode):
+			# TODO: Handle unicode
+			return re.match(what, self.name(), re.I)
+		if type(what) in (tuple, list):
+			for w in what:
+				if self.nameLike(w): return True
+		else:
+			return what.match(self.name(), re.I)
+
+class TextTag(Tag):
+
+	def __init__( self, html, start, end):
+		Tag.__init__(self, html, start, end)
+
+class TagList:
+
+	def __init__( self, content=None ):
+		"""Creates a blank TagTree. It should be populated with data using the
+		`fromHTML` method."""
+		if content == None: content = []
+		self.content = content
+
+	def append( self, content ):
+		assert isinstance(content, Tag) 
+		content.context = self
+		self.content.append(content)
+		return content
+
+	def fromHTML( self, html, scraper=None ):
+		"""Creates the tag list content from the given HTML data. This will
+		erase the content of this tag list, replacing it by this one."""
+		self.content = []
+		offset    = 0
+		level     = 0 
+		end       = False
+		last      = None
+		if scraper == None: scraper = HTML
+		while not end:
+			tag = scraper.findNextTag(html, offset)
+			# If there is no tag, it is the document
+			if tag == None:
+				self.append(TextTag( html, start=offset, end=len(html)))
+				end = True
 			else:
-				html_children   = "".join((c.html() for c in self.children))
-				return "<%s %s>%s</%s>" % (self.name, html_attributes,
-				html_children, self.name)
-	
-	def tags( self, name=None, names=None, attributes={} ):
-		"""Iterates through all the subset tags that match the given criteria."""
-		if self.match(name=name, names=names,attributes=attributes):
-			yield self
-		if self.children:
-			for c in self.children:
-				for r in c.tags(name=name, names=names, attributes=attributes):
-					yield r
+				tag, tag_end_offset = tag
+				tag_type, tag_name, tag_start, attr_start, attr_end = tag
+				tag_name_lower      = tag_name.lower()
+				# There may be text inbetween
+				if tag_start > offset:
+					self.append(TextTag(html, start=offset,end=tag_start))
+				# We process the encountered tag
+				#new  = level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
+				new = ElementTag( html, tag_name, tag_start, attr_end + 1, attr_start, attr_end, type=tag_type, level=level)
+				self.append(new)
+				last = new
+				offset = tag_end_offset
+		return self.content
 
-	def asString( self ):
-		if self.indice != None: prefix = "%-4d" % (self.indice)
-		else: prefix = ""
-		# If this is a text node
-		if self.name == Node.TEXT:
-			return prefix + "#text:" + repr(self.text)
-		# If this is a regular node
-		res = prefix
-		if self.attributes:
-			res += "%s: %s" % (self.name, " ".join(u"%s=%s" % (k,repr(v)) for k,v in self.attributes.items()))
-		else:
-			res += self.name
-		if self.children:
-			for c in self.children:
-				res += "\n"
-				for line in unicode(c.asString()).split("\n"):
-					res += line[:len(prefix)] + "| " + line[len(prefix):] + "\n"
-				res = res[:-1]
-		return res
+	def tagtree( self ):
+		"""Folds this list into a tree, which is returned as result."""
+		root       = TagTree(id=-1)
+		parents    = [root]
+		counter    = 0
+		tags_stack = []
+		def find_opening_tag(tag, stack):
+			for i in range(len(stack)-1,-1,-1):
+				this_tag = stack[i]
+				if this_tag.name() == tag.name() and this_tag.type == Tag.OPEN:
+					return this_tag, i
+			return None, -1
+		# We iterate on the tags of this taglist
+		for tag in self.content:
+			#  We create the node
+			if isinstance(tag, TextTag):
+				parents[-1].append(TagTree(tag))
+			else:
+				if tag.type == Tag.CLOSE:
+					opening_tag, level = find_opening_tag(tag, tags_stack)
+					if not opening_tag:
+						print "WARNING: no opening tag for ", tag
+						continue
+					else:
+						while len(tags_stack) > level:
+							stack_tag = tags_stack.pop()
+							node      = parents.pop()
+						assert stack_tag == opening_tag
+						node.close(tag)
+				else:
+					if tags_stack and HTML_closeWhen( tag, tags_stack[-1] ):
+						parent_tag = tags_stack.pop()
+						closing_tag = ElementTag(tag._html, parent_tag.name(), tag.start, tag.start, type=Tag.CLOSE)
+						parents.pop().close(tag)
+					if tag.type == Tag.EMPTY or HTML_isEmpty(tag):
+						node = TagTree(tag, id=counter)
+						parents[-1].append(node)
+						counter   += 1
+					else:
+						node = TagTree(tag, id=counter)
+						parents[-1].append(node)
+						parents.append(node)
+						tags_stack.append(tag)
+						counter   += 1
+		root._taglist = self
+		return root
+
+	def html( self ):
+		"""Converts this tags list to HTML"""
+		res = []
+		for tag in self.content:
+			assert isinstance(tag, Tag) or isinstance(tag, Text)
+			res.append(tag.html())
+		return "".join(res)
+	
+	def innerhtml(self):
+		res = []
+		for tag in self.content[1:-1]:
+			assert isinstance(tag, Tag) or isinstance(tag, Text)
+			res.append(tag.html())
+		return "".join(res)
+
+	def __iter__( self ):
+		for tag in self.content:
+			yield tag
 	
 	def __str__( self ):
-		return self.asString()
+		return str(self.content)
+
+class TagTree:
+	"""A tree node wraps one or two tags and allows to structure tags as a tree.
+	The tree node instance offers a nice interface to manipulate the HTML
+	document as a tree."""
+
+	TEXT  = "#text"
+
+	def __init__( self, startTag=None, endTag=None, id=None ):
+		self._parent   = None
+		self._depth    = 0
+		self._taglist  = None
+		self.startTag  = None
+		self.endTag    = None
+		self.id        = id
+		self.children  = []
+		self.name      = None
+		self.open(startTag)
+		self.close(endTag)
+
+	def has( self, name):
+		if self.startTag == None: return None
+		return self.startTag.has(name)
+
+	def get( self, name):
+		if self.startTag == None: return None
+		return self.startTag.get(name)
+
+	def attributes( self ):
+		if self.startTag == None: return {}
+		return self.startTag.attributes()
+
+	def setParent( self, parent ):
+		self._parent = parent
+		self._depth  = self.parent().depth() + 1
+	
+	def parent( self ):
+		return self._parent
+
+	def depth( self ):
+		return self._depth
+
+	def isRoot( self ):
+		return self._parent == None
+
+	def elements( self, withName ):
+		if self.startTag and isinstance(self.startTag, TextTag): return ()
+		if self.startTag and self.startTag.nameLike(withName):
+			return (self,)
+		else:
+			res = []
+			for c in self.children:
+				res.extend(c.elements(withName))
+		return res
+
+	def open( self, startTag):
+		if startTag==None: return
+		assert self.startTag == None
+		assert self.endTag == None
+		assert isinstance(startTag, Tag)
+		self.startTag = startTag
+		if isinstance(startTag, TextTag):
+			self.name     = TagTree.TEXT
+		else:
+			self.name     = startTag.name()
+		assert self.name, repr(startTag.html()) + ":" + startTag.name()
+		return self
+
+	def close( self, endTag ):
+		if endTag==None: return
+		assert self.endTag == None
+		assert isinstance(endTag, ElementTag)
+		self.endTag = endTag
+		return self
+	
+	def append( self, node ):
+		assert isinstance(node, TagTree)
+		node.setParent(self)
+		assert node != self
+		self.children.append(node)
+		self._taglist = None
+		return self
+
+	def taglist( self, contentOnly=False ):
+		"""Returns a tag list from this Tree Node."""
+		if self._taglist == None:
+			content = []
+			if self.startTag: content.append(self.startTag)
+			for c in self.children: content.extend(c.taglist(contentOnly=True))
+			if self.endTag: content.append(self.endTag)
+			self._taglist = TagList(content=content)
+		if contentOnly:
+			return self._taglist.content
+		else:
+			return self._taglist
+
+	def asText( self, ):
+		if self.name == self.TEXT:
+			return "#text:" + repr(self.startTag.html())
+		else:
+			if self._parent == None:
+				res =  "#root\n"
+			else:
+				res =  self.startTag.name() 
+				if self.id != None: res += "#%d" % (self.id) 
+				attr  = []
+				for k,v in self.attributes().items():attr.append("%s=%s" % (k,v))
+				attr = ", ".join(attr)
+				res += "@%d:%s\n" % (self.depth(), attr)
+			for c in self.children:
+				ctext = ""
+				for line in c.asText().split("\n"):
+					if not line: continue
+					if not ctext:
+						ctext  = "+-- " + line + "\n"
+					else:
+						ctext += "    " + line + "\n"
+				res += ctext
+			return res
+
+	def __str__( self ):
+		return self.asText()
+	
+	def __repr__( self ):
+		return str(self.taglist())
+
+	def html( self ):
+		"""Converts this tags tree to HTML"""
+		return self.taglist().html()
+	
+	def innerhtml( self ):
+		return self.taglist().innerhtml()
+
+	def __iter__( self ):
+		for tag in self.taglist():
+			yield tag
+
+# -----------------------------------------------------------------------------
+#
+# HTML PRESETS
+#
+# -----------------------------------------------------------------------------
+
+HTML_EMPTY = """\
+AREA BASE BASEFONT BR COL FRAME HR IMG INPUT ISINDEX LINK META PARAM
+"""[:-1].split()
+
+HTML_MAYBE_EMPTY = """\
+A P
+"""[:-1].split()
+
+def HTML_isEmpty( tag ):
+	tag_name = tag.name().upper()
+	if tag_name in HTML_EMPTY: return True
+	if tag_name == "A" and not tag.has("href"): return True
+	return False
+
+def HTML_mayBeEmpty( tag ):
+	tag_name = tag.name().upper()
+	if tag_name in HTML_MAYBE_EMPTY: return True
+	return False
+
+def HTML_closeWhen( current, parent ):
+	cur_name = (current.name() or "").upper()
+	par_name = (parent.name() or "").upper()
+	if cur_name == par_name == "TD": return True
+	if cur_name == par_name == "TR": return True
+	if cur_name == par_name == "P": return True
+	if par_name == "P" and cur_name in ("DIV", "TABLE", "UL", "BLOCKQUOTE",
+	"FORM"): return True
+	return False
 
 # -----------------------------------------------------------------------------
 #
@@ -156,116 +400,52 @@ class Node:
 #
 # -----------------------------------------------------------------------------
 
-LEVEL  = 0
-TYPE   = 1
-NAME   = 2
-START  = 3
-END    = 4
-ASTART = 5
-AEND   = 6
-
 class HTMLTools:
 	"""This class contains a set of tools to process HTML text data easily. This
 	class can operate on a full HTML document, or on any subset of the
 	document."""
 
+	LEVEL_ACCOUNT = [ "html", "head", "body", "div", "table", "tr", "td" ]
+
 	def __init__( self ):
-		self.LEVEL_ACCOUNT = [ "html", "head", "body", "div", "table", "tr", "td" ]
+		pass
 
-	def nextTag( self, html, offset=0 ):
-		"""Finds the next tag in the given HTML text from the given offset. This
-		returns (tag type, tag name, tag start, attributes start, attributes
-		end) and tag end or None."""
-		if offset >= len(html) - 1: return None
-		m = RE_HTMLSTART.search(html, offset)
-		if m == None:
-			return None
-		n = RE_HTMLEND.search(html, m.end())
-		if n == None:
-			return self.nextTag(html, m.end())
-		if m.group()[1] == "/": tag_type = HTML_CLOSE
-		elif n.group()[0] == "/": tag_type = HTML_SINGLE
-		else: tag_type = HTML_OPEN
-		return (tag_type, m.group(1), m.start(), m.end(), n.start()), n.end()
+	# BASIC PARSING OPERATIONS
+	# ========================================================================
 
-	def iterate( self, html, write=None, closeOn=() ):
-		"""Iterates on the html document and yields a string for text content or
-		a tuple (level, type, name, start, attrstart, attrend) corresponding to
-		the tag level (number of parents), tag type (HTML_OPEN or HTML_CLOSE),
-		tag start and end offsets, attributes start and end offsets."""
-		offset   = 0
-		level    = 0 
-		end      = False
-		last     = None
-		parents  = []
-		sequence = []
-		if closeOn: closeOn = list(closeOn)
-		keep_sequence = closeOn and len(closeOn) or 0
-		while not end:
-			tag = self.nextTag(html, offset)
-			if tag == None:
-				yield html[offset:]
-				end = True
-			else:
-				tag, tag_end_offset = tag
-				tag_type, tag_name, tag_start, attr_start, attr_end = tag
-				tag_name_lower      = tag_name.lower()
-				# We update the keep sequence, which is the sequence of last tag
-				# names
-				if keep_sequence:
-					while len(sequence) > keep_sequence -1: sequence = sequence[1:]
-					sequence.append(tag_name_lower)
-				# There may be text inbetween
-				if tag_start > offset: yield html[offset:tag_start]
-				# We decrement the level if necessary
-				if tag_name_lower in self.LEVEL_ACCOUNT and tag_type == HTML_CLOSE:
-					if tag_name_lower in parents:
-						while parents[-1] != tag_name_lower:
-							level -= 1
-							parents.pop()
-						level -= 1
-						parents.pop()
-				# We process the encountered tag
-				new  = level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
-				# We may want to write the found tag to the write stream
-				if write != None:
-					# We skip closing tags when writing
-					if last and new and last[1] == HTML_OPEN \
-					and new[1] == HTML_CLOSE and last[0] == new[0] \
-					and last[2] == new[2]:
-						pass
-					else:
-						tag_class = RE_HTMLCLASS.search(html[attr_start:attr_end])
-						tag_id    = RE_HTMLID.search(html[attr_start:attr_end])
-						tag_href  = RE_HTMLHREF.search(html[attr_start:attr_end])
-						meta      = []
-						if tag_id:    meta.append("#" + tag_id.group(1))
-						if tag_class: meta.append("." + tag_class.group(1))
-						if tag_href:  meta.append("<" + tag_href.group(1) + ">")
-						meta = ", ".join(meta)
-						if meta: meta = ": " + meta
-						write.write("%-3d %s%s%s\n" % (level, "| " * level, tag_name, meta))
-				yield new
-				last = new
-				# We may close the parent if we are in a closeOn section
-				if sequence == closeOn:
-					level -= 1
-					parents.pop()
-				# We increment the level if necessary
-				if tag_name_lower in self.LEVEL_ACCOUNT:
-					if tag_type == HTML_OPEN:
-						parents.append(tag_name_lower)
-						level += 1
-				offset = tag_end_offset
+	def parse( self, html ):
+		"""Returns a tagtree from the given HTML string, tag list or tree
+		node."""
+		tag_list = TagList()
+		tag_list.fromHTML(html, scraper=self)
+		return tag_list.tagtree()
 
-	def join( self, html, tags ):
-		res = []
-		for tag in tags:
-			if type(tag) not in (list, tuple):
-				res.append(tag)
-			else:
-				res.append(html[tag[START]:tag[END]])
-		return "".join(res)
+	def taglist( self, data ):
+		"""Converts the given text or tagtree into a taglist."""
+		if type(data) == str:
+			tag_list = TagList()
+			tag_list.fromHTML(data, scraper=self)
+			return tag_list
+		elif isinstance(data, TagList):
+			return data
+		elif isinstance(data, TagTree):
+			return data.taglist()
+		else:
+			raise Exception("Unsupported data:" + data)
+
+	def html( self, data ):
+		"""Converts the given taglist or tagtree into HTML.""" 
+		if type(data) == str:
+			return data
+		elif isinstance(data, TagList):
+			return data.html()
+		elif isinstance(data, TagTree):
+			return data.html()
+		else:
+			raise Exception("Unsupported data:" + data)
+
+	# TEXT OPERATIONS
+	# ========================================================================
 
 	def textcut( self, text, cutfrom=None, cutto=None ):
 		"""Cuts the text from the given marker, to the given marker."""
@@ -285,95 +465,13 @@ class HTMLTools:
 		if not empty: lines = filter(lambda x:x, lines)
 		return lines
 
-	def cut( self, html, level=None, tags=None, text=True, method=KEEP_ABOVE ):
-		"""Cuts the given HTML data so that only tags above the given level will
-		be preserved. You can use different methods (KEEP_ABOVE, KEEP_BELOW,
-		KEEP_SAME) to tell what tags you would like to keep."""
-		last_level = 0
-		parents    = []
-		if tags: tags = map(string.lower, tags)
-		for tag in self.iterate(html):
-			# If this is a text node
-			if type(tag) not in (list, tuple):
-				if level != None:
-					if last_level + 1 == level and method.find(KEEP_SAME)==-1: continue
-					if last_level + 1 <  level and method.find(KEEP_BELOW)==-1: continue
-					if last_level + 1 >  level and method.find(KEEP_ABOVE)==-1: continue
-				if tags and not filter(lambda t:t in parents, tags): continue
-				if text: yield tag
-			# If this is an element node
-			else:
-				# We set the parents right
-				while len(parents) != tag[LEVEL]: parents.pop()
-				if tag[TYPE] != HTML_CLOSE: parents.append(tag[NAME].lower())
-				last_level = tag[LEVEL]
-				if level != None:
-					if tag[LEVEL] == level and method.find(KEEP_SAME)==-1: continue
-					if tag[LEVEL] <  level and method.find(KEEP_BELOW)==-1: continue
-					if tag[LEVEL] >  level and method.find(KEEP_ABOVE)==-1: continue
-				# FIXME: Shouln't it be lambda t:t in tags, parents
-				if tags and not filter(lambda t:t in parents, tags): continue
-				yield tag
-
-	def split( self, html, level=None, strip=None, tagOnly=False, contentOnly=False, tags=None ):
-		"""Splits the given html according to the given tag. For instance,
-		splitting an HTML document according to DIVs will return a list of blocks of
-		text beginning and ending with DIVs (excepted the leading and trailing
-		blocks)."""
-		assert not tagOnly == contentOnly == True
-		off       = 0
-		cut_level = level
-		for tag in self.iterate(html):
-			if not type(tag) in (tuple, list): continue
-			if tags != None and not tag[NAME].lower() in tags: continue
-			if cut_level != None and tag[LEVEL] != cut_level: continue
-			if cut_level == None: cut_level = tag[LEVEL]
-			if tag[TYPE] == HTML_OPEN:
-				if contentOnly: cut_off = tag[END]
-				else:           cut_off = tag[START]
-			else:
-				if contentOnly: cut_off = tag[START]
-				else: cut_off = tag[END]
-			if strip and tag[TYPE] == HTML_OPEN:
-				pass
-			elif tagOnly:
-				if tag[TYPE] != HTML_CLOSE:
-					yield html[tag[START]:tag[END]]
-			else:
-				yield html[off:cut_off]
-			off = cut_off
-		if not strip and not tagOnly:
-			yield html[off:]
-
-	def levelof( self, html, tags ):
-		"""Return the level where first one of the given tags is
-		encountered."""
-		if type(tags) in (str, unicode): tag = (tags,)
-		for tag in self.iterate(html):
-			if not type(tag) in (tuple, list): continue
-			if tag[NAME].lower() in tags: return tag[LEVEL]
-		return None
-
-	def levels( self, html, tags ):
-		"""Return the levels at which the given tags can be encountered. The
-		tags must a be  a list of strings. The tag names are matched in a
-		case-insensitive fashion"""
-		if type(tags) in (str, unicode): tag = (tags,)
-		levels = []
-		for tag in self.iterate(html):
-			if not type(tag) in (tuple, list): continue
-			if tag[NAME].lower() in tags and tag[LEVEL] not in levels:
-				levels.append(tag[LEVEL])
-		levels.sort()
-		return levels
-
 	def text( self, data, expand=False, norm=False ):
-		"""Strips the text or list (resulting from an @iterate) from HTML
-		tags, so that only the text remains."""
-		if type(data) in (tuple, list):
-			res = "".join([text for text in data if type(text) not in (list,tuple)])
-		else:
-			res = "".join([text for text in self.iterate(data) if type(text) not in (list, tuple)])
+		"""Strips the given text from HTML text"""
+		res = []
+		for tag in self.taglist(data):
+			if not isinstance(tag, TextTag): continue
+			res.append(tag.html())
+		res = "".join(res)
 		if expand: res = self.expand(res)
 		if norm: res = self.norm(res)
 		return res
@@ -419,112 +517,12 @@ class HTMLTools:
 			text = ''.join(textParts)
 		return text
 
-	def tree( self, html ):
-		"""Creates a tree of Nodes from the given HTML document."""
-		root       = Node(name=Node.ROOT,children=[], indice=-1)
-		parents    = [root]
-		counter    = 0
-		for tag in self.iterate(html):
-			#  We create the node
-			if not type(tag) in (tuple, list):
-				parents[-1].append(Node(name=Node.TEXT, text=tag, indice=counter))
-				counter += 1
-			else:
-				# We pop the parents to match the level
-				while len(parents) - 1 > tag[LEVEL]: parents.pop()
-				# We skip close nodes
-				if tag[TYPE] == HTML_CLOSE: continue
-				# We create the node
-				attributes = HTML.parseAttributes(html[tag[ASTART]:tag[AEND]])
-				node       = Node(name=tag[NAME], attributes=attributes, indice=counter)
-				counter   += 1
-				# If it is single
-				if tag[TYPE] == HTML_SINGLE:
-					parents[-1].append(node)
-				# If it is open
-				else:
-					parents[-1].append(node)
-					parents.append(node)
-		return root
+
+	# FORMS-RELATED OPERATIONS
+	# ========================================================================
 
 	def forms( self, html ):
-		"""Will extract the forms from the HTML document in a way that tolerates
-		inputs outside of forms (this happens sometime). This function is very
-		fast, because it only uses regexes to search for tags within the
-		document, so there is no need to parse the HTML.
-		
-		Currently form inputs, select and option are supported.
-		"""
-		if not html: raise Exception("No data")
-		i       = 0
-		end     = len(html)
-		matches = []
-		# We get all the form data
-		while i < end:
-			match = RE_FORMDATA.search(html, i)
-			if not match: break
-			matches.append(match)
-			i = match.end()
-		# And we create the forms tree
-		current_form   = None
-		current_select = None
-		forms          = {}
-		default_count  = 0
-		for match in matches:
-			# We get the end of the tag, which may be with or without a trailing
-			# /
-			tag_end    = html.find(">", match.end())
-			if html[tag_end-1] == "/": tag_end -=1
-			name       = match.group(1).lower()
-			attributes = HTML.parseAttributes(html[match.end():tag_end].strip())
-			if name == "form":
-				form_name = attributes.get("name")
-				if not form_name:
-					form_name = "default%s" % ( default_count )
-					default_count += 1
-				# We do not replace an existing frame (which may happen if there
-				# is two <form name='...> with the same name (yes, this can
-				# happen !)
-				if not forms.has_key(form_name):
-					current_form = Form(form_name, HTML.expand(attributes.get("action")))
-					forms[current_form.name] = current_form
-			elif name == "input":
-				assert current_form
-				# TODO: Make this nicer
-				js = filter(lambda s:s[0].startswith("on"), attributes.items())
-				# FIXME: Adda a warnings interface
-				#if js:
-				#	print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
-				current_form.inputs.append(attributes)
-			elif name == "select":
-				assert current_form
-				current_select = attributes
-				current_select["type"] = "select"
-				current_form.inputs.append(current_select)
-			elif name == "option":
-				assert current_form
-				assert current_select
-				selected = attributes.get("selected") or ""
-				if current_select == None:
-				#	print "Warning: Option outside of select: ", current_form.name
-					continue
-				if selected.lower() == "selected":
-					current_select["value"] = attributes["value"]
-				else:
-					# TODO: We ignore them for now
-					pass
-			elif name == "textarea":
-				text_end = html.find("</textarea", match.end())
-				text = html[tag_end+1:text_end]
-				attributes["type"] = "textarea"
-				attributes["value"] = text
-				current_form.inputs.append(attributes)
-			else:
-				raise Exception("Unexpected tag: " + name)
-		# Prefills the forms
-		for form in forms.values():
-			form._prefill()
-		return forms
+		return form.parseForms(self, self.html(html))
 
 	def links( self, html, like=None ):
 		"""Iterates through the links found in this document. This yields the
@@ -540,6 +538,25 @@ class HTMLTools:
 			if not like or like.match(href):
 				yield tag, href
 
+	# UTILITIES
+	# ========================================================================
+
+	def findNextTag( self, html, offset=0 ):
+		"""Finds the next tag in the given HTML text from the given offset. This
+		returns (tag type, tag name, tag start, attributes start, attributes
+		end) and tag end or None."""
+		if offset >= len(html) - 1: return None
+		m = RE_HTMLSTART.search(html, offset)
+		if m == None:
+			return None
+		n = RE_HTMLEND.search(html, m.end())
+		if n == None:
+			return HTMLTools.findNextTag(html, m.end())
+		if m.group()[1] == "/": tag_type = Tag.CLOSE
+		elif n.group()[0] == "/": tag_type = Tag.EMPTY
+		else: tag_type = Tag.OPEN
+		return (tag_type, m.group(1), m.start(), m.end(), n.start()), n.end()
+
 	@staticmethod
 	def onRE( text, regexp, off=0 ):
 		"""Itearates through the matches for the given regular expression."""
@@ -552,10 +569,14 @@ class HTMLTools:
 
 	@staticmethod
 	def norm( text ):
+		"""Normalizes the spaces (\t, \n, etc) so that everything gets converted
+		to single space."""
 		return RE_SPACES.sub(" ", text).strip()
 
 	@staticmethod
 	def parseTag( text ):
+		"""Parses the HTML/XML tag in the given text, returning its name and
+		attributes."""
 		text  = text.strip()
 		space = text.find(" ")
 		if   text[0:2] == "</":  start = 2
@@ -573,6 +594,7 @@ class HTMLTools:
 
 	@staticmethod
 	def parseAttributes(text, attribs = None):
+		"""Parses the HTML/XML attributes described in the given text."""
 		if attribs == None: attribs = {}
 		eq = text.find("=")
 		# There may be attributes without a trailing =
@@ -607,191 +629,7 @@ class HTMLTools:
 				attribs[name.lower()] = value
 				return HTML.parseAttributes(text[end+1:].strip(), attribs)
 
-
 # We create a shared instance with the scraping tools
 HTML = HTMLTools()
-
-def do( f, *args, **kwargs ):
-	"""This function is useful to "do" iterator functions which are only run if
-	put within a loop or tuple/list function."""
-	return tuple(f(*args, **kwargs))
-
-# -----------------------------------------------------------------------------
-#
-# FORM
-#
-# -----------------------------------------------------------------------------
-
-class FormException(Exception): pass
-class Form:
-	"""A simple interface to forms, returned by the scraper. Forms can be easily
-	filled and their values (@values) can be given as parameters to the @browse
-	module.
-	
-	A form has:
-
-	- a _single action_
-	- a _list of inputs_ which are dicts of equivalent HTML element attributes.
-	  For elements such as `select` or `textarea`, the input `type` property is
-	  set to the actual element type.
-	- a _list of values_ which will be associated with values when filling the
-	  form.
-	
-	Form values are cleanly separated from their inputs, so that you can simply
-	clear the values to resubmit the form.
-	"""
-
-# TODO: Add STRICT mode for form that checks possible values/action/field names
-
-	def __init__( self, name, action=None ):
-		self.name   = name
-		self.action = action
-		self.inputs = []
-		self.values = {}
-
-	def fields( self, namelike=None, namesOnly=False ):
-		"""Returns that list of inputs (or input names if namesOnly is True) that
-		can be assigned a value (checkboxes, inputs, text areas, etc)."""
-		res = filter(lambda f:f.get("type") != "submit", self.inputs)
-		if namelike:
-			namelike = re.compile(namelike)
-			res = filter(lambda f:namelike.match(f.get("name")), res)
-		if namesOnly: res = tuple(f.get("name") for f in res)
-		return res
-
-	def actions( self, namelike=None, namesOnly=False ):
-		"""Returns the list of inputs (or input names if namesOnly is True) that
-		correspond to form action buttons."""
-		res = filter(lambda f:f.get("type")=="submit", self.inputs)
-		if namelike:
-			if namelike in (str,unicode): namelike = re.compile(namelike)
-			res = filter(lambda f:namelike.match(f.get("name")), res)
-		if namesOnly: res = tuple(f.get("name") for f in res)
-		return res
-
-	def clear( self ):
-		"""Clears the existing values set in this form, and returns them."""
-		old_values = self.values
-		self.values = {}
-		return old_values
-
-	def fill( self, **values ):
-		"""Fills this form with the given values."""
-		field_names = map(lambda f:f.get("name"), self.fields())
-		for name, value in values.items():
-			self.values[name] = value
-	
-	def set( self, name, value ):
-		"""Sets the given form value. This modified the values within the form,
-		and not the fields directly."""
-		self.values[name] = value
-
-	def unset( self, name ):
-		"""This unsets the given value from this form values. The effect will be
-		that that the named input default value will be used instead of a
-		user-provided one."""
-		del self.values[name]
-
-	def parameters( self ):
-		"""Returns a list of (key,value) respecting the original input order."""
-		res   = []
-		names = []
-		for field in self.inputs:
-			name = field.get("name")
-			names.append(name)
-			if not name: continue
-			if self.values.get(name) == None: continue
-			res.append((name, self.values.get(name)))
-		# The user may have added specific parameters that do not correspond to
-		# a specific input, so we ensure that they are added here
-		for key, value in self.values.items():
-			if key not in names:
-				res.append((key, value))
-		return res
-
-	def submit( self, action=None, encoding="latin-1", strip=False, **values ):
-		"""Submits this form with the given action and given values. This
-		basically takes all the default values set within this form, replacing
-		them with the set or given values (given as keywords), and returns a list of
-		(key, value) pairs that represent the parameters that should be encoded
-		in the response.
-		
-		In this repsect, the submit method does not do the actual submission,
-		but rather prepares the data for submission.
-
-		Also, note that _submission does not mutate the form_, it simply creates
-		a list of parameters suitable for creating the body of a post request.
-		"""
-		self.fill(**values)
-		parameters  = []
-		# We get the field and action names
-		field_names  = []
-		# We fill values that were initialized
-		for field in self.fields():
-			key = field.get("name")
-			field_names.append(key)
-			value = self.values.get(key) or field.get("value") or ""
-			if strip and not value: continue
-			if type(value) == unicode: value = unicode(value).encode(encoding)
-			parameters.append((key, value))
-		# And add values that do not correspond to any field
-		for key, value in values.items():
-			if key not in field_names:
-				if strip and not value: continue
-				if type(value) == unicode: value = unicode(value).encode(encoding)
-				parameters.append((key, value))
-		if action:
-			if action not in self.actions(namesOnly=True):
-				raise FormException("Action not available: %s, in form %s: choose from %s" %
-				(action, self.name, self.actions(namesOnly=True)))
-			parameters.append((action, self.values.get(action)))
-		return parameters
-
-	def _prefill( self ):
-		"""Sets the default values for this form."""
-		for inp in self.inputs:
-			name  = inp.get("name")
-			value = inp.get("value")
-			if name and value: self.values[name] = value
-	
-	def asText( self ):
-		"""Returns a pretty-printed text representation of this form. This
-		representation is very useful when it comes to analysing web pages."""
-		# TODO: Rewrite Form.asText, it is ugly.
-		cut     = 20
-		res     = "FORM: %s (%s)\n" % (self.name, self.action)
-		rows    = []
-		max_row = []
-		def cut_row( a ):
-			a = str(a)
-			if len(a) > cut: return a[:cut - 3] + "..."
-			else: return a
-		for inp in self.inputs:
-			rows.append([inp.get("type"), inp.get("name"), self.values.get(inp.get("name")), inp.get("value")])
-			rows[-1][2] = cut_row(rows[-1][2])
-			rows[-1][3] = cut_row(rows[-1][3])
-			for i in range(len(rows[-1])):
-				if len(max_row) == len(rows[-1]):
-					max_row[i] = max(max_row[i], len(str(rows[-1][i])))
-				else:
-					max_row.append(len(str(rows[-1][i])))
-		format  = "%-" + str(max_row[0]) + "s | %-" + str(max_row[1])  + "s"
-		format += "= %-" + str(max_row[2]) + "s  %" + str(max_row[3]) + "s"
-		rows.sort(lambda a,b:cmp(a[0:2], b[0:2]))
-		for row in rows:
-			if row[2] == row[3]:
-				state   = row[3]
-				default = "(default)"
-			else:
-				state   = row[2]
-				default = ""
-			if state == "None": state = ""
-
-			res += format % (row[0], row[1], state, default)
-			res += "\n"
-		return res
-
-	def __repr__( self ):
-		return "Form '%s'->%s: %s" % (self.name, self.action, repr(self.inputs))
 
 # EOF
