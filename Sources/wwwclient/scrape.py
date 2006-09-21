@@ -241,6 +241,23 @@ class TagTree:
 		self.name      = None
 		self.open(startTag)
 		self.close(endTag)
+	
+	def clone( self, children=None ):
+		clone           = TagTree()
+		clone._parent   = self._parent
+		clone._depth    = self._depth
+		clone._taglist  = self._taglist 
+		clone.id        = self.id
+		clone.name      = self.name
+		if children is None:
+			clone.children  = []
+			for child in self.children:
+				clone.children.append(child.clone())
+		else:
+			clone.children = children
+		clone.open(self.startTag)
+		clone.close(self.endTag)
+		return clone
 
 	def has( self, name):
 		if self.startTag == None: return None
@@ -249,6 +266,9 @@ class TagTree:
 	def get( self, name):
 		if self.startTag == None: return None
 		return self.startTag.get(name)
+
+	def attribute(self, name):
+		return self.attributes().get(name)
 
 	def attributes( self ):
 		if self.startTag == None: return {}
@@ -267,14 +287,53 @@ class TagTree:
 	def isRoot( self ):
 		return self._parent == None
 
-	def elements( self, withName ):
+	def _cutBelow( self, data, value ):
+		"""Helper function for the `cut()` method."""
+		depth = self.depth()
+		if depth > value:
+			data.append(self)
+		else:
+			for child in self.children:
+				child._cutBelow(data, value) 
+		return data
+
+	def cut( self, above=None, below=None, at=None):
+		res = []
+		assert not above and not at, "Not implemented"
+		if not below is None:
+			root = TagTree()
+			for child in self._cutBelow(res, below):
+				root.append(child)
+			return root
+
+	def filter( self, reject=None, accept=None, recursive=False ):
+		res  = []
+		root = self.clone(children=res)
+		for child in self.children:
+			if not reject is None:
+				if reject(child): continue
+			if not accept is None:
+				if accept(child):
+					if recursive:
+						root.append(child.filter(reject=reject,accept=accept,recursive=recursive))
+					else:
+						root.append(child.clone())
+			else:
+				if recursive:
+					root.append(child.filter(reject=reject,accept=accept,recursive=recursive))
+				else:
+					root.append(child.clone())
+		return root
+
+	def find( self, withName, withDepth=None ):
+		if not withDepth is None: raise Exception("Not implemented")
 		if self.startTag and isinstance(self.startTag, TextTag): return ()
 		if self.startTag and self.startTag.nameLike(withName):
 			return (self,)
 		else:
 			res = []
 			for c in self.children:
-				res.extend(c.elements(withName))
+				res.extend(c.find(withName))
 		return res
 
 	def open( self, startTag):
@@ -296,7 +355,7 @@ class TagTree:
 		assert isinstance(endTag, ElementTag)
 		self.endTag = endTag
 		return self
-	
+
 	def append( self, node ):
 		assert isinstance(node, TagTree)
 		node.setParent(self)
@@ -310,7 +369,7 @@ class TagTree:
 		if self._taglist == None:
 			content = []
 			if self.startTag: content.append(self.startTag)
-			for c in self.children: content.extend(c.taglist(contentOnly=True))
+			for c in self.children: content.extend(c.list(contentOnly=True))
 			if self.endTag: content.append(self.endTag)
 			self._taglist = TagList(content=content)
 		if contentOnly:
@@ -454,6 +513,7 @@ class HTMLTools:
 
 	def textcut( self, text, cutfrom=None, cutto=None ):
 		"""Cuts the text from the given marker, to the given marker."""
+		text = self.html(text)
 		if cutfrom: start = text.find(cutfrom)
 		else: start = 0
 		if cutto: end = text.find(cutto)
@@ -465,13 +525,14 @@ class HTMLTools:
 	def textlines( self, text, strip=True, empty=False ):
 		"""Returns a list of lines for the given HTML text. Lines are stripped
 		and empty lines are filtered out by default."""
+		text = self.html(text)
 		lines = text.split("\n")
 		if strip: lines = map(string.strip, lines)
 		if not empty: lines = filter(lambda x:x, lines)
 		return lines
 
 	def text( self, data, expand=False, norm=False ):
-		"""Strips the given text from HTML text"""
+		"""Strips the given tags from HTML text"""
 		res = []
 		for tag in self.list(data):
 			if not isinstance(tag, TextTag): continue
@@ -533,15 +594,18 @@ class HTMLTools:
 		"""Iterates through the links found in this document. This yields the
 		tag name and the href value."""
 		if not html: raise Exception("No data: " + repr(html))
+		html = self.html(html)
 		if like != None:
 			if type(like) in (str,unicode): like = re.compile(like)
+		res = []
 		for match in self.onRE(html, RE_HTMLLINK):
 			tag  = match.group()
 			tag  = tag[1:tag.find(" ")]
 			href = match.group(2)
 			if href[0] in ("'", '"'): href = href[1:-1]
 			if not like or like.match(href):
-				yield tag, href
+				res.append((tag, href))
+		return res
 
 	# UTILITIES
 	# ========================================================================

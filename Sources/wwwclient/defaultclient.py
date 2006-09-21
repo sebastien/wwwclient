@@ -66,11 +66,11 @@ class HTTPClient(client.HTTPClient):
 			colon = header.find(":")
 			http_headers[header[:colon].strip()] = header[colon+1:]
 		request  = self._http.request(method, url, body, http_headers)
-		print "=---------------------------------------"
-		print method, url, host
-		print headers
-		print body
-		print "=---------------------------------------"
+		# print "=---------------------------------------"
+		# print method, url, host
+		# print headers
+		# print body
+		# print "=---------------------------------------"
 		return request
 
 	def _performRequest( self, counter=0 ):

@@ -214,7 +214,6 @@ class HTTPClient:
 		res     = []
 		off     = 0
 		self._newCookies = []
-		print message
 		while off < len(message):
 			eol = message.find(CRLF, off)
 			eoh = message.find(CRLF + CRLF, off)
@@ -269,7 +268,6 @@ class HTTPClient:
 	def _decodeBody( self, body, contentEncoding=None, encoding=None ):
 		if contentEncoding:
 			if contentEncoding.lower().strip() == "gzip":
-				print repr(body)
 				body = zlib.decompress(body)
 				if encoding: return body.decode(encoding)
 				else: return body

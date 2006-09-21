@@ -467,74 +467,211 @@ Getting to the desired data
     >   f = s.form().fill(q="python web scraping")
     >   s.submit(f, action="btnG", method="GET")
     
-    Now that we have submitted our query, we can simply have a look at the HTML
-    and try to find some strings that we could use to separate the data into
-    chunks. Luckily, Google actually separates the search results by "<!--m-->"
-    comments.
+    Now that we have submitted our query, we can simply have a look at the HTML.
+    If you compare the HTML of a page retrieved using FireFox and a page
+    retrieved using the basic WWWClient, you will notice a difference: Google
+    actually do some user-agent detection (such as many sites, like Freshmeat).
 
-    So we can start by iterating on these chunks:
-
-    >   for chunk in s.page().split("<!--m-->"): 
-    >       print chunk
-    
-    convert the page into a
-    tag tree and look at what the data we would like to get to looks like:
+    Looking at the HTML source code won't help that much, so that we can
+    directly print a tree representation of the page:
 
     >   >>> tree = scrape.HTML.tree(s.page())
     >   >>> print tree
     
-    I won't print the whole tree here, but if you study it for a while, you will
-    probably find it quite complex. So
+    I won't reproduce the whole tree here, but if you study the tree, you will
+    notice that the elements we are interested in are:
 
+    >    +-- #text:u' '
+    >    +-- p#264@4:class=g
+    >        +-- a#265@5:href=http://www.lib.uwaterloo.ca/~cpgray/project.html, class=l
+    >            +-- #text:u'Metadata on the '
+    >            +-- b#266@6:
+    >                +-- #text:u'Web'
+    >    +-- table#267@4:cellpadding=0, border=0, cellspacing=0
+    >        +-- tr#268@5:
+    >            +-- td#269@6:class=j
+    >                +-- font#270@7:size=-1
+    >                    +-- #text:u'By using Zope with the '
+    >                    +-- b#271@8:
+    >                        +-- #text:u'python'
+    >                    +-- #text:u' urllib '
+    >                     +-- b#272@8:
+    >                         +-- #text:u'Web'
 
+    these are actually the link title (#264) and the link extract (#267). We
+    notice that link titles are `<p>`  of depth 4, and link descriptions are
+    `<table>` of depth 4.
 
-
-    split::
-
+    Let's introduce the `cut()` method of the tag tree:
+    
     cut::
+        
+        The `cut()` method allows to cut the tree so that it creates a subtree
+        with all the nodes above, below, or in the cutting range.
+
+        `tree.cut(below=4)` will return a subtree with all the nodes of the tree
+        with a depth of 5 and more.
+
+        `tree.cut(above=4)` will return a subtree with all the nodes of the tree
+        with a depth of 3 or less.
+
+    So the `cut()` method is actually what we are looking for, and calling
+
+    >   subtree = tree.cut(below=3)
+
+    will return us the data node with depth 4 and more in a new tag tree. We may
+    now want to keep only the `<p>` and `<table>` elements.
+
+    filter::
+
+        The `filter()` method allows to create a new tag tree which content
+        filtered by rejection (`reject`) or acceptation (`accept`) predicates.
+
+    >   subtree = subtree.filter(accept=lambda n:n.name.lower() in ("table","p"))
+
+    If we print the subtree, we will notice that it is still quite complex,
+    having both font tags, and split strings. Now, for each child of our
+    subtree, we could try to use text-conversion method (which will be presented
+    later):
+
+    >   for child in subtree.children:
+    >       print "--------\n", HTML.text(child)
+
+    The result is much more easy to read:
+
+    >   ----------
+    >   ASPN : Python Cookbook : Access password-protected web ...
+    >   ----------
+    >   ActiveState Open Source Programming tools for Perl Python XML xslt scripting
+    >   with  free ... Title: Access password-protected web applications for
+    >   scraping. ...aspn.activestate.com/ASPN/Cookbook/Python/Recipe/391929 - 26k -
+    >   Cached - Similar&nbsp;pages
+    >   ----------
+    >   &quot;&quot;&quot;Python module for web browsing and scraping. Done: - navigate ...
+    >   ----------
+    >   &quot;&quot;&quot;Python module for web browsing and scraping. Done: -
+    >   navigate to absolute and  relative URLs - follow links in page or region -
+    >   find strings or regular ...zesty.ca/python/scrape.py - 31k - Cached -
+    >   Similar&nbsp;pages
+
+    with this information, we can confirm that we have extracted the right
+    information.
+
+    If we want to select a particular subset of a node, like the `<a>` within
+    the `<p>`, we can use the `elements()` method of the tag tree:
+
+    find::
+
+        The `find()` method allows to return a subset of the descendants of
+        the given node that have the given name (`elements(withName=...)`) or
+        depth (`elements(withDepth=...)`).
+
+    We can modify slightly the above script to print the link along with the
+    title:
+
+    >   for node in nodes.children:
+    >       print HTML.text(node)
+    >       if node.name == "p":
+    >           link = node.elements(withName="a")[0]
+    >           print "-->", link.attribute("href")
+    >       else:
+    >           print "---------"
+
+    We've seen the basic `cut`, `filter` and `find` functions of the tag tree.
+    They consist in the most useful operations you can do with the tag tree, and
+    the ones you are the most likely to use in your everyday scraping duties.
+    
 
 Web automation
 --------------
 
+    In addition to the basic tag tree operations, you can have access to higher
+    level functions that will automatically extract _forms_ and _links_ for you.
+
     forms::
+
+        The forms method scrapes the HTML document for forms and inputs
+        (including `textarea`, `select`, and all the likes). The scraping
+        algorithm will manage some borderline cases, such as definition of
+        fields outside of a form.
+
+        To use it, simply do:
+
+        >   HTML.forms(tagtree or taglist or string)
 
     links::
 
+        Pretty much like the `forms()` method, the `links()` method will return
+        the list of links as `[(tagname, href),...]`. Links cover every HTML
+        element that defines an `href` or `src` attribute, so that it includes
+        images and iframes.
 
-Printing subset of your HTML
-----------------------------
+        In the above example:
+
+        >   >>> HTML.links(link)
+        >   [(u'a', u'http://www.gossamer-threads.com/lists/python/python/516801')]
+
+    The web automation procedures all work with strings, tag list and tag trees,
+    and are optimized for very fast information retrieval.
+
+Text processing functions
+-------------------------
+
+    As we've seen, it is important to be able to easily convert between the
+    string, the tag list and the tag tree. When manipulating the string
+    representation, we may want to remove the HTML tags, normalize the spacing
+    or expand the entities. 
+    
+    WWWClient offers functions to cover all these needs:
+
+    expand::
+        
+        This function takes a string with HTML entities, and returns a version
+        of the string with expanded entities.
+
+        >   >>> scrape.HTML.expand("&quot;&quot;&quot;Python")
+        >   '"""Python'
+
+    norm::
+        
+        The `norm()` function replaces multiple spaces, tabs and newlines by
+        a single space. This ensures that spacing in your text is consistent.
+
+    text::
+
+        The `text()` method automatically strips the tags from your document
+        (it is a bit like stripping the tags from a tag list), and returns the
+        text version of it. You can set the `expand` and `norm` parameters to
+        pass the result to the corresponding functions.
 
     html::
     
         The `html()` method allows you to convert your taglist or tagtree to a
         string of HTML data. If you join a taglist created from an HTML string,
-        it will be strictly identical to this string.
+        it will be strictly identical to this string. 
 
-Removing HTML data
-------------------
 
-    expand::
-
-    text::
-
-Further text processing
------------------------
+    In addition to these basic functions, you also have the following
+    convenient functions:
 
     textcut::
+        
+        Textcut allows to specify `cutfrom` and `cutto` markers (as strings)
+        that will delimit the text range to be returned. For instance if you are
+        looking for the text between `<p>` and `</p>`, you simply have to do:
+
+        >   HTML.textcut(text, "<p>", "</p>")
+
+        When the markers are not found, the start or end bounds of the text are
+        used instead.
 
     textlines::
 
-Detecting changes
------------------
-
-    1) Specify which elements should be tracked
-    2) Compute the "tag" for the set of elements
-
-The HTMLNode object
--------------------
+        Texlines allow to split your text in lines, optionally stripping
+        (`strip`) the lines and filtering out empty lines (`empty`).
 
 Tips
-----
+====
 
     1) Split your HTML into sections::
 
