@@ -5,17 +5,16 @@ import _import
 from wwwclient import browse, scrape
 HTML = scrape.HTML
 
-session  = browse.Session("www.google.com/")
-page     = session.page()
-forms    = HTML.forms(page)
+s = browse.Session("http://www.google.com")
+f = s.form().fill(q="python web scraping")
+s.submit(f, action="btnG", method="GET")
 
-search_form = forms["f"]
-search_form.fill( q="Britney Spears" )
-session.submit(search_form, action="btnG", method="GET")
-page = session.page()
+for chunk in s.page().split("<!--m-->"):
+	print "---------------"
+	print chunk
 
-print page
-print HTML.parse(page)
+#print page
+#print HTML.parse(page)
 
 # Google results are not properly closed, so we had to identify patterns where
 # there were  a closing tag should be inserted

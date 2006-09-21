@@ -42,11 +42,20 @@ class Pairs:
 		self.pairs = []
 		self.merge(params)
 
-	def set( self, name, value=None ):
+	def set( self, name, value=None, replace=False ):
 		"""Sets the given name to hold the given value. Every previous value set
 		or added to the given name will be cleared."""
-		self.clear(name)
-		self.add(name, value)
+		if replace:
+			i = 0
+			for hname, hvalue in self.pairs:
+				if name.lower() == hname.lower(): break
+				i += 1
+			if i == len(self.pairs):
+				self.add(name,value)
+			else:
+				self.paris[i] = (name,value)
+		else:
+			self.add(name, value)
 	
 	def get( self, name ):
 		"""Gets the pair with the given name (case-insensitive)"""
@@ -122,7 +131,7 @@ class Request:
 			value = (filename, mimetype, content)
 			assert len(value) == 3
 			return (name, value, CONTENT_ATTACHMENT)
-		elif file != None:
+		elif filename != None:
 			assert mimetype == client.DEFAULT_MIMETYPE, "Mimetype is ignored when attaching file"
 			return (name, filename, FILE_ATTACHMENT)
 		else:
@@ -171,12 +180,12 @@ class Request:
 	def cookies( self ):
 		return self._cookies
 
-	def header( self, name, value=client ):
+	def header( self, name, value=client, replace=False ):
 		"""Gets or set the given header."""
 		if value == client:
 			return self._headers.get(name)
 		else:
-			self._headers.set(name, str(value))
+			self._headers.set(name, str(value), replace=False)
 
 	def headers( self ):
 		"""Returns the headers for this request as a Pairs instance."""
@@ -342,7 +351,7 @@ class Session:
 	DEFAULT_RETRIES  = 5
 	DEFAULT_DELAY    = 1
 
-	def __init__( self, url=None, verbose=False ):
+	def __init__( self, url=None, verbose=False, personality=None, follow=True, do=True ):
 		"""Creates a new session at the given host, and for the given
 		protocol."""
 		self._httpClient      = defaultclient.HTTPClient()
@@ -354,6 +363,9 @@ class Session:
 		self._maxTransactions = self.MAX_TRANSACTIONS
 		self._referer         = None
 		self.verbose          = verbose
+		self._follow          = follow
+		self._do              = do
+		self._personality     = personality
 		self.MERGE_COOKIES    = True
 		if url: self.get(url)
 
@@ -367,12 +379,35 @@ class Session:
 		return self._transactions[-1]
 
 	def page( self ):
+		"""Returns the data of the last page. This is an alias for
+		`self.last().data()`."""
+		assert self.last(), "No transaction available."
 		return self.last().data()
 
 	def url( self ):
+		"""Returns the URL of the last page. This is an alias for
+		`self.last().url()`"""
+		assert self.last(), "No transaction available."
 		return self.last().url()
 
-	def attach( self, name, filename=None, content=None, mimetype=None ):
+	def forms( self ):
+		"""Returns a dictionary with the forms contained in the response."""
+		assert self.last(), "No transaction available."
+		return self.last().forms()
+	
+	def form( self, name=None ):
+		"""Returns the first form declared in the last transaction response data."""
+		forms = self.forms()
+		if not forms: return None
+		if not name: name = forms.keys()[0]
+		return forms.get(name)
+
+	def attach( self, name, filename=None, content=None, mimetype=client.DEFAULT_MIMETYPE ):
+		"""Creates an attachment with the given name for the given `filename` or
+		`content` (`mimetype` will be guessed unlesss specified).
+		
+		This attachment can be used later by giving it as value for the `attach`
+		parameter of the `post` method."""
 		return Request.makeAttachment( name, filename=filename, content=content,
 		mimetype=mimetype)
 
@@ -391,11 +426,13 @@ class Session:
 				if v != None: base = base[:i]
 				path = base + "-" + str(count) + ext
 				count += 1
-		f = file(path, "w")
-		f.write(data or self.last().data())
+		f = open(path, "wb")
+		data = self.last().data()
+		f.write(data)
 		f.close()
 
 	def referer( self, value=client ):
+		"""Returns/sets the referer for the next request."""
 		if value == client:
 			if self._referer:
 				res = self._referer
@@ -406,7 +443,17 @@ class Session:
 		else:
 			self._referer = value
 
-	def get( self, url="/", params=None, headers=None, follow=True, do=True ):
+	def get( self, url="/", params=None, headers=None, follow=None, do=None ):
+		"""Gets the page at the given URL, with the optional params (as a `Pair`
+		instance), with the given headers.
+
+		The `follow` and `do` options tell if redirects should be followed and
+		if the request should be sent right away.
+
+		This returns a `Transaction` object, which is `done` if the `do`
+		parameter is true."""
+		if follow is None: follow = self._follow
+		if do is None: do = self._do
 		# TODO: Return data instead of session
 		url         = self.__processURL(url)
 		request     = self._createRequest( url=url, params=params, headers=headers )
@@ -421,7 +468,20 @@ class Session:
 				transaction = self.get(transaction.redirect(), do=True)
 		return transaction
 
-	def post( self, url=None, params=None, data=None, mimetype=None, fields=None, attach=None, headers=None, follow=True, do=True ):
+	def post( self, url=None, params=None, data=None, mimetype=None,
+	fields=None, attach=None, headers=None, follow=None, do=None ):
+		"""Posts data to the given URL. The optional `params` (`Pairs`) or `data`
+		contain the posted data. The `mimetype` describes the mimetype of the data
+		(if it is a special kind of data). The `fields` is a `Pairs` instance of
+		values to be encoded within the body. The `attach` may contain some
+		attachements created before using the `attach()` method.
+		
+		You should have a look at the `wwwclient.client` module for more
+		information on how the parameters are processed.
+		
+		As always, this returns a new `Transaction` instance."""
+		if follow is None: follow = self._follow
+		if do is None: do = self._do
 		url = self.__processURL(url)
 		request     = self._createRequest(
 			method=POST, url=url, fields=fields, params=params, attach=attach,
@@ -436,14 +496,16 @@ class Session:
 			while transaction.redirect() and follow:
 				transaction = self.get(transaction.redirect(), do=True)
 		return transaction
-	
-	def submit( self, form, values={}, attach=[], action=None,  method=POST, do=True, strip=True ):
+
+	def submit( self, form, values={}, attach=[], action=None,  method=POST,
+	do=None, strip=True ):
 		"""Submits the given form with the current values and action (first
 		action by default) to the form action url, and doing
 		a POST or GET with the resulting values (POST by default).
 
 		The submit method is a convenience wrapper that processes the given form
 		and gives its values as parameters to the post method."""
+		if do is None: do = self._do
 		# We fill the form values
 		# And we submit the form
 		if type(form) in (unicode, str):
@@ -457,6 +519,7 @@ class Session:
 		if method == POST or attach:
 			return self.post( url, fields=fields, attach=attach, do=do )
 		elif method == GET:
+			assert not attach, "Attachments are incompatible with GET submission"
 			return self.get( url,  params=fields, do=do )
 		else:
 			raise SessionException("Unsupported method for submit: " + method)
@@ -509,6 +572,7 @@ class Session:
 		request = Request(**kwargs)
 		last    = self.last()
 		if self.referer(): request.header("Referer", self.referer())
+		if self._personality: self._personality.apply(request)
 		return request
 
 	def __addTransaction( self, transaction ):
@@ -516,6 +580,46 @@ class Session:
 		if len(self._transactions) > self._maxTransactions:
 			self._transactions = self._transactions[1:]
 		self._transactions.append(transaction)
+
+# -----------------------------------------------------------------------------
+#
+# PERSONALITIES
+#
+# -----------------------------------------------------------------------------
+
+class Personality:
+	"""Personality classes allow to represent the way a specific application
+	(typically a browser) interacts with a web server. Some servers do check for
+	specific headers and will react differently depending on wether they
+	recognize the request as being part of a browser or not.
+
+	Personalities allow to ensure that specific headers are set in all requests,
+	so that the requests really look like they come from a specific browser."""
+
+	def __init__( self, useragent ):
+		self.userAgent = useragent
+	
+	def apply( self, request ):
+		pass
+
+class FireFox(Personality):
+
+	UBUNTU_DAPPER = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.8.0.5) Gecko/20060731" \
+	              + "Ubuntu/dapper-security Firefox+SPY/1.5.0.1"
+
+	def __init__( self ):
+		Personality.__init__(self, self.UBUNTU_DAPPER)
+
+	def apply( self, request ):
+		request.header( "User-Agent", self.userAgent)
+		request.header( "Accept",
+		"text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5"
+		)
+		request.header( "Accept-Language", "en-us,en;q=0.5")
+		#request.header( "Accept-Encoding", "gzip,deflate")
+		request.header( "Accept-Charset", "ISO-8859-1,utf-8;q=0.7,*;q=0.7")
+		request.header( "Keep-Alive", "300")
+		request.header( "Connection", "keep-alive")
 
 # Events
 # - Redirect

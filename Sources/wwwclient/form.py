@@ -41,10 +41,19 @@ class Form:
 # TODO: Add STRICT mode for form that checks possible values/action/field names
 
 	def __init__( self, name, action=None ):
-		self.name   = name
-		self.action = action
-		self.inputs = []
-		self.values = {}
+		self.name    = name
+		self.action  = action
+		self.inputs  = []
+		self.values  = {}
+		self._fields = {}
+
+	def _addInput( self, inputDict ):
+		"""Private function used by the `parseForms` function to add an input to
+		this form. The input will be added to the `inputs` list and to the
+		`_fields` dict."""
+		self.inputs.append(inputDict)
+		if inputDict.get("name"):
+			self._fields[inputDict["name"]] = inputDict
 
 	def fields( self, namelike=None, namesOnly=False ):
 		"""Returns that list of inputs (or input names if namesOnly is True) that
@@ -56,6 +65,18 @@ class Form:
 		if namesOnly: res = tuple(f.get("name") for f in res)
 		return res
 
+	def field( self, name, caseSenstitive=True ):
+		"""Returns the field with the given name, or None if it does not
+		exist."""
+		if not caseSenstitive: name = name.lower()
+		for field in self.inputs:
+			field_name = field.get("name")
+			if field_name is None: continue
+			if not caseSenstitive: field_name = field_name.lower()
+			if field_name == name:
+				return field
+		return None
+	
 	def actions( self, namelike=None, namesOnly=False ):
 		"""Returns the list of inputs (or input names if namesOnly is True) that
 		correspond to form action buttons."""
@@ -77,10 +98,18 @@ class Form:
 		field_names = map(lambda f:f.get("name"), self.fields())
 		for name, value in values.items():
 			self.values[name] = value
+		return self
 	
 	def set( self, name, value ):
 		"""Sets the given form value. This modified the values within the form,
 		and not the fields directly."""
+		field = self._fields.get(name)
+		if fields:
+			field_type = field.get("type")
+			if field_type and field_type.lower() == "checkbox":
+				if    value is None: pass
+				elif  value: value = "on"
+				else: value = "off"
 		self.values[name] = value
 
 	def unset( self, name ):
@@ -239,12 +268,12 @@ def parseForms( scraper, html ):
 			# FIXME: Adda a warnings interface
 			#if js:
 			#	print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
-			current_form.inputs.append(attributes)
+			current_form._addInput(attributes)
 		elif name == "select":
 			assert current_form
 			current_select = attributes
 			current_select["type"] = "select"
-			current_form.inputs.append(current_select)
+			current_form._addInput(current_select)
 		elif name == "option":
 			assert current_form
 			assert current_select
@@ -262,7 +291,7 @@ def parseForms( scraper, html ):
 			text = html[tag_end+1:text_end]
 			attributes["type"] = "textarea"
 			attributes["value"] = text
-			current_form.inputs.append(attributes)
+			current_form._addInput(attributes)
 		else:
 			raise Exception("Unexpected tag: " + name)
 	# Prefills the forms

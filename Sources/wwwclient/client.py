@@ -6,10 +6,10 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 04-Jun-2006
-# Last mod  : 04-Jul-2006
+# Last mod  : 21-Sep-2006
 # -----------------------------------------------------------------------------
 
-import re, mimetypes
+import re, mimetypes, urllib, zlib
 
 __doc__ = """\
 This modules defines an abstract class for HTTP clients, that creates a simple,
@@ -28,6 +28,7 @@ FILE_ATTACHMENT    = 0
 CONTENT_ATTACHMENT = 1
 
 RE_CONTENT_LENGTH  = re.compile("\s*Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
+RE_CONTENT_ENCODING= re.compile("\s*Content-Encoding\s*:(.*)\r\n", re.I|re.MULTILINE)
 RE_CONTENT_TYPE    = re.compile("\s*Content-Type\s*:\s*([0-9]+)",   re.I|re.MULTILINE)
 RE_CHARSET         = re.compile("\s*charset=([\w\d_-]+)",           re.I|re.MULTILINE)
 RE_LOCATION        = re.compile("\s*Location\s*:(.*)\r\n",          re.I|re.MULTILINE)
@@ -118,6 +119,7 @@ class HTTPClient:
 				content.append('')
 				content.append(self._valueToString(value))
 		if attach:
+			attach = self._ensureAttachment(attach)
 			for name, filename, atype in attach:
 				content.append("--" + BOUNDARY)
 				if atype == FILE_ATTACHMENT:
@@ -155,6 +157,18 @@ class HTTPClient:
 		be a triple (filename, mimetype, value).
 		"""
 		raise Exception("GET method must be implemented by HTTPClient subclasses.")
+	
+	def _ensureAttachment( self, attach ):
+		"""Ensures that the given attachment is a list of attachments. For
+		instance if attach is a single attachment, it will be returned as
+		`[attach]`."""
+		if attach is None: return attach
+		if len(attach) == 3:
+			for a in attach:
+				if type(a) in (tuple,list) and len(a) == 3:
+					continue
+				return [attach]
+		return attach
 
 	def _valueToString( self, value ):
 		"""Ensures that the given value will be an encoded string, encoded in
@@ -164,6 +178,23 @@ class HTTPClient:
 		elif value == None: value = ""
 		else: value = str(value)
 		return value
+
+	def _valueToPostData( self, value ):
+		"""Encodes the given value as an url-encoded string suitable for
+		post-data. If the value is a string, it will be left as-s (only
+		converted to the default encoding)"""
+		if   type(value) == str:
+			return value
+		elif type(value) == unicode:
+			return value
+		elif type(value) in (list,tuple):
+			return urllib.urlencode(value)
+		elif type(value) == dict:
+			return urllib.urlencode(value)
+		else:
+			# It should be a Pair... but we cannot check it because of circular
+			# imports
+			return value.asURL()
 
 	def _absoluteURL( self, url ):
 		"""Returns the absolute URL for the given url"""
@@ -183,6 +214,7 @@ class HTTPClient:
 		res     = []
 		off     = 0
 		self._newCookies = []
+		print message
 		while off < len(message):
 			eol = message.find(CRLF, off)
 			eoh = message.find(CRLF + CRLF, off)
@@ -192,7 +224,9 @@ class HTTPClient:
 			headers        = message[eol+2:eoh]
 			charset        = RE_CHARSET.search(headers)
 			is_chunked     = RE_CHUNKED.search(headers)
-			content_length = RE_CONTENT_LENGTH.search(headers)
+			content_length   = RE_CONTENT_LENGTH.search(headers)
+			content_encoding = RE_CONTENT_ENCODING.search(headers)
+			if content_encoding: content_encoding = content_encoding.group(1)
 			if charset:
 				encoding   = charset.group(1)
 			else:
@@ -201,14 +235,14 @@ class HTTPClient:
 			if content_length:
 				content_length = int(content_length.group(1))
 				off        = eoh + 4 + content_length
-				body       = message[eoh+4:off]
+				body       = self._decodeBody(message[eoh+4:off], content_encoding, encoding)
 			# Otherwise, the transfer type may be chunks
 			elif is_chunked:
 				# FIXME: For the moment, chunks are supposed to be separated by
 				# CRLF + CRLF only (this is what google.com returns)
 				off        = message.find(CRLF + CRLF, eoh + 4)
 				if off == -1: off = len(message) 
-				body       = message[eoh+4:off].decode(encoding)
+				body       = self._decodeBody(message[eoh+4:off], content_encoding, encoding)
 			# Or there is simply no body
 			else:
 				off        = eoh + 4
@@ -232,6 +266,19 @@ class HTTPClient:
 		self._responses = res
 		return res
 	
+	def _decodeBody( self, body, contentEncoding=None, encoding=None ):
+		if contentEncoding:
+			if contentEncoding.lower().strip() == "gzip":
+				print repr(body)
+				body = zlib.decompress(body)
+				if encoding: return body.decode(encoding)
+				else: return body
+			else:
+				raise Exception("Unsupported content encoding: " + contentEncoding)
+		else:
+			if encoding: return body.decode(encoding)
+			else: return body
+		
 	def _parseStatefulHeaders( self, headers ):
 		"""Return the Location and Set-Cookie headers from the given header
 		string."""

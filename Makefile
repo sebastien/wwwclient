@@ -36,7 +36,7 @@ RESOURCES       = Resources
 DISTRIBUTION    = Distribution
 API             = $(DOCUMENTATION)/wwwclient-api.html
 DISTROCONTENT   = $(DOCUMENTATION) $(SOURCES) $(SCRIPTS) $(TESTS) $(RESOURCES) \
-                  Makefile README.txt setup.py
+                  Makefile README setup.py
 
 # Project files_______________________________________________________________
 
@@ -148,8 +148,8 @@ dist:
 	-C $(DISTRIBUTION) $(PROJECT)-$(PROJECT_VERSION)
 	@rm -rf $(DISTRIBUTION)/$(PROJECT)-$(PROJECT_VERSION)
 
-man: README.txt
-	kiwi -m -ilatin-1 README.txt  MANUAL.html
+man: README
+	kiwi -m -ilatin-1 README  README.html
 
 doc: man
 	@echo "Generating $(PROJECT) documentation"

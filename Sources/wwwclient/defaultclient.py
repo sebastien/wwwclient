@@ -36,9 +36,11 @@ class HTTPClient(client.HTTPClient):
 		if data:
 			assert not fields, "Fields must be empty when data is provided"
 			assert not attach, "No attachment is allowed when data is provided"
+			data = self._valueToPostData(data)
 		# Otherwise we encode the data as multipart
 		if data == None:
 			assert mimetype == None, "Mimetype is ignored when no data is given."
+			attach = self._ensureAttachment(attach)
 			data, mimetype = self.encode(fields, attach)
 		# In case we have a mimetype, we update the list of headers
 		# appropriately
@@ -64,6 +66,11 @@ class HTTPClient(client.HTTPClient):
 			colon = header.find(":")
 			http_headers[header[:colon].strip()] = header[colon+1:]
 		request  = self._http.request(method, url, body, http_headers)
+		print "=---------------------------------------"
+		print method, url, host
+		print headers
+		print body
+		print "=---------------------------------------"
 		return request
 
 	def _performRequest( self, counter=0 ):

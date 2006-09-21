@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
 # Creation  : 19-Jun-2006
-# Last mod  : 12-Sep-2006
+# Last mod  : 21-Sep-2006
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -305,7 +305,7 @@ class TagTree:
 		self._taglist = None
 		return self
 
-	def taglist( self, contentOnly=False ):
+	def list( self, contentOnly=False ):
 		"""Returns a tag list from this Tree Node."""
 		if self._taglist == None:
 			content = []
@@ -346,17 +346,17 @@ class TagTree:
 		return self.asText()
 	
 	def __repr__( self ):
-		return str(self.taglist())
+		return str(self.list())
 
 	def html( self ):
 		"""Converts this tags tree to HTML"""
-		return self.taglist().html()
+		return self.list().html()
 	
 	def innerhtml( self ):
-		return self.taglist().innerhtml()
+		return self.list().innerhtml()
 
 	def __iter__( self ):
-		for tag in self.taglist():
+		for tag in self.list():
 			yield tag
 
 # -----------------------------------------------------------------------------
@@ -416,11 +416,14 @@ class HTMLTools:
 	def parse( self, html ):
 		"""Returns a tagtree from the given HTML string, tag list or tree
 		node."""
+		return self.tree(html)
+	
+	def tree( self, html ):
 		tag_list = TagList()
 		tag_list.fromHTML(html, scraper=self)
 		return tag_list.tagtree()
 
-	def taglist( self, data ):
+	def list( self, data ):
 		"""Converts the given text or tagtree into a taglist."""
 		if type(data) == str:
 			tag_list = TagList()
@@ -429,13 +432,15 @@ class HTMLTools:
 		elif isinstance(data, TagList):
 			return data
 		elif isinstance(data, TagTree):
-			return data.taglist()
+			return data.list()
 		else:
 			raise Exception("Unsupported data:" + data)
 
 	def html( self, data ):
 		"""Converts the given taglist or tagtree into HTML.""" 
 		if type(data) == str:
+			return data
+		elif type(data) == unicode:
 			return data
 		elif isinstance(data, TagList):
 			return data.html()
@@ -468,7 +473,7 @@ class HTMLTools:
 	def text( self, data, expand=False, norm=False ):
 		"""Strips the given text from HTML text"""
 		res = []
-		for tag in self.taglist(data):
+		for tag in self.list(data):
 			if not isinstance(tag, TextTag): continue
 			res.append(tag.html())
 		res = "".join(res)
