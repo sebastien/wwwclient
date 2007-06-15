@@ -65,9 +65,12 @@ class Tag:
 		return repr(self._html[self.start:self.end])
 
 class ElementTag(Tag):
+	"""An element tag is a tag implementation that represents an HTML element,
+	which can have attributes and contain child elements."""
 
-	def __init__( self, html, name, start, end, astart=None, aend=None, attributes=None,
+	def __init__( self, html, start, end, astart=None, aend=None, attributes=None,
 	level=None, type=None ):
+		"""Creates a new tag element extracted from the given 'html' string."""
 		Tag.__init__(self, html, start, end)
 		if type == None: type = Tag.OPEN
 		self._attributes = attributes
@@ -80,14 +83,17 @@ class ElementTag(Tag):
 		if self._attributes == None:
 			self._attributes = HTML.parseAttributes(self._html[self.astart:self.aend].strip())
 		return self._attributes
-	
+
 	def has( self, name ):
+		"""Tells if this tag has the given attribute"""
 		return self.attributes().has_key(name)
 
 	def get( self, name ):
+		"""Returns the given attribute set for this tag."""
 		return self.attributes().get(name)
 
 	def name( self ):
+		"""Returns this tag name"""
 		if self.type == Tag.OPEN or self.type == Tag.EMPTY:
 			return self._html[self.start+1:self.astart].strip()
 		else:
@@ -148,7 +154,7 @@ class TagList:
 					self.append(TextTag(html, start=offset,end=tag_start))
 				# We process the encountered tag
 				#new  = level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
-				new = ElementTag( html, tag_name, tag_start, attr_end + 1, attr_start, attr_end, type=tag_type, level=level)
+				new = ElementTag( html, tag_start, attr_end + 1, attr_start, attr_end, type=tag_type, level=level)
 				self.append(new)
 				last = new
 				offset = tag_end_offset
@@ -186,7 +192,7 @@ class TagList:
 				else:
 					if tags_stack and HTML_closeWhen( tag, tags_stack[-1] ):
 						parent_tag = tags_stack.pop()
-						closing_tag = ElementTag(tag._html, parent_tag.name(), tag.start, tag.start, type=Tag.CLOSE)
+						closing_tag = ElementTag(tag._html, tag.start, tag.start, type=Tag.CLOSE)
 						parents.pop().close(tag)
 					if tag.type == Tag.EMPTY or HTML_isEmpty(tag):
 						node = TagTree(tag, id=counter)
@@ -231,6 +237,9 @@ class TagTree:
 	TEXT  = "#text"
 
 	def __init__( self, startTag=None, endTag=None, id=None ):
+		"""TagTrees should be created by an HTMLTools, and not really directly.
+		However, if you really want to create a tree yourself, use the
+		'startTag' and 'endTags' to specify start and end tags."""
 		self._parent   = None
 		self._depth    = 0
 		self._taglist  = None
@@ -243,6 +252,8 @@ class TagTree:
 		self.close(endTag)
 	
 	def clone( self, children=None ):
+		"""Clones this tree. If the 'children' attribute is 'True', then the
+		children will be cloned as well (deep clone)."""
 		clone           = TagTree()
 		clone._parent   = self._parent
 		clone._depth    = self._depth
@@ -260,31 +271,41 @@ class TagTree:
 		return clone
 
 	def has( self, name):
+		"""Tells if the start tag of this tag tree has an attribute of the given
+		name."""
 		if self.startTag == None: return None
 		return self.startTag.has(name)
 
 	def get( self, name):
+		"""Gets the start tag of this tag tree attribute with the given
+		'name'"""
 		if self.startTag == None: return None
 		return self.startTag.get(name)
 
 	def attribute(self, name):
+		"""Alias for 'get(name)"""
 		return self.attributes().get(name)
 
 	def attributes( self ):
+		"""Returns the attributes of this tag tree start tag"""
 		if self.startTag == None: return {}
 		return self.startTag.attributes()
 
 	def setParent( self, parent ):
+		"""Sets the parent TagTree for this tag tree."""
 		self._parent = parent
 		self._depth  = self.parent().depth() + 1
-	
+
 	def parent( self ):
+		"""Returns the parnet tag tree (if any)."""
 		return self._parent
 
 	def depth( self ):
+		"""Returns the depth of this tag tree."""
 		return self._depth
 
 	def isRoot( self ):
+		"""Tells if this tag tree is a root (has no parent) or not."""
 		return self._parent == None
 
 	def _cutBelow( self, data, value ):
@@ -326,6 +347,11 @@ class TagTree:
 		return root
 
 	def find( self, withName, withDepth=None ):
+		# FIXME:
+		# Search by 'name', 'nameLike'
+		#        by 'attributes', 'attributesLike'
+		#        by 'id', 'idLike'
+		#        by 'class', 'classLike'
 		if not withDepth is None: raise Exception("Not implemented")
 		if self.startTag and isinstance(self.startTag, TextTag): return ()
 		if self.startTag and self.startTag.nameLike(withName):
