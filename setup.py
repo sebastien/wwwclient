@@ -41,9 +41,9 @@ setup(
     description = SUMMARY,
 	long_description = DESCRIPTION,
     license     = LICENSE,
-    keywords    = KEYWORDS
+    keywords    = KEYWORDS,
     url         = "http://www.ivy.fr/%s" % (PROJECT.lower()),
-    download_url= "http://www.ivy.fr/%s/-%s.tar.gz" % (PROJECT.lower(),PROJECT.lower(),VERSION) ,
+    download_url= "http://www.ivy.fr/%s/%s-%s.tar.gz" % (PROJECT.lower(),PROJECT.lower(),VERSION) ,
     package_dir = { "": "Sources" },
     packages    = [PROJECT.lower()],
     classifiers = [
