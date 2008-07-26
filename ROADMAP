@@ -1,0 +1,16 @@
+== WWWClient
+== Roadmap
+-- Author: Sébastien Pierre
+-- Date:   26-Jul-2006
+
+Version 1.0::
+
+  [X] Complete documentation
+  [ ] Browser personality support
+  [ ] FireFox profile
+  [ ] Safari Profile
+  [ ] IE profile
+
+# EOF - vim: ts=2 sw=2 et syn=kiwi
+
+
