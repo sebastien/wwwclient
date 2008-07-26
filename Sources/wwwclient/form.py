@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 # Encoding: iso-8859-1
-# vim: tw=80 ts=4 sw=4 noet
 # -----------------------------------------------------------------------------
-# Project   : WWWClient - Python client Web toolkit
+# Project   : WWWClient
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
+# -----------------------------------------------------------------------------
+# License   : GNU Lesser General Public License
+# Credits   : Xprima.com
+# -----------------------------------------------------------------------------
 # Creation  : 12-Sep-2006
-# Last mod  : 12-Sep-2006
+# Last mod  : 26-Jul-2008
 # -----------------------------------------------------------------------------
 
 import re
@@ -65,6 +68,11 @@ class Form:
 		if namesOnly: res = tuple(f.get("name") for f in res)
 		return res
 
+	def fieldNames( self ):
+		"""Alias to 'fields(nameOnly=True)'. Returns the name of the fields of
+		this form."""
+		return self.fields(namesOnly=True)
+
 	def field( self, name, caseSenstitive=True ):
 		"""Returns the field with the given name, or None if it does not
 		exist."""
@@ -104,12 +112,15 @@ class Form:
 		"""Sets the given form value. This modified the values within the form,
 		and not the fields directly."""
 		field = self._fields.get(name)
-		if fields:
+		if field:
 			field_type = field.get("type")
 			if field_type and field_type.lower() == "checkbox":
 				if    value is None: pass
 				elif  value: value = "on"
 				else: value = "off"
+		else:
+			# FIXME: Issue a warning, because the field did not exist before
+			pass
 		self.values[name] = value
 
 	def unset( self, name ):
@@ -298,3 +309,5 @@ def parseForms( scraper, html ):
 	for form in forms.values():
 		form._prefill()
 	return forms
+
+# EOF - vim: tw=80 ts=4 sw=4 noet

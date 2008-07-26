@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 # Encoding: iso-8859-1
-# vim: tw=80 ts=4 sw=4 noet
 # -----------------------------------------------------------------------------
-# Project   : WWWClient - Python client Web toolkit
+# Project   : WWWClient
 # -----------------------------------------------------------------------------
-# Author    : Sebastien Pierre <sebastien@xprima.com>
+# Author    : Sebastien Pierre                               <sebastien@ivy.fr>
+# -----------------------------------------------------------------------------
+# License   : GNU Lesser General Public License
+# Credits   : Xprima.com
+# -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 25-Aug-2006
+# Last mod  : 26-Jul-2006
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
+# TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
+# TODO: Add   session.select() to select a form before submit
 
 import urlparse, urllib, mimetypes, re, os
 import client, defaultclient, scrape
@@ -124,7 +129,14 @@ class Request:
 	def makeAttachment( name, filename=None, content=None,
 	mimetype=client.DEFAULT_MIMETYPE ):
 		"""Creates an internal representation for an attachment, which is either
-		the given filename or the given content, filename and data"""
+		the given filename or the given content, filename and data, as a triple:
+		
+		>    (<content name>,   <content value>, CONTENT_ATTACHMENT)
+		>    (<file name from>, <actual file name>, FILE_ATTACHMENT)
+		
+		Here 'CONTENT_ATTACHMENT' and 'FILE_ATTACHMENT' are constants from the
+		'wwwclient' module to denote the type of attachment.
+		"""
 		if content != None:
 			assert filename, "Filename is required when attaching content"
 			assert mimetype, "Mimetype is required when attaching content"
@@ -172,12 +184,17 @@ class Request:
 			return self._url
 
 	def params( self ):
+		"""Returns the params attached to this request. The params are returned
+		as a 'Pair' instance."""
 		return self._params
 	
 	def fields( self ):
+		"""Returns the fields of this request, as a 'Pair' instance (if any).
+		fields are related to form-submission (see also 'data' method)."""
 		return self._fields
 
 	def cookies( self ):
+		"""Returns the cookies defined in this request, as a 'Pair' instance (if any)."""
 		return self._cookies
 
 	def header( self, name, value=client, replace=False ):
@@ -218,6 +235,8 @@ class Request:
 		content=content, mimetype=mimetype))
 
 	def attachments( self ):
+		"""Returns the list of attachments for this request (as a list of
+		triples, as explained in 'makeAttachment')."""
 		return self._attachments
 
 # -----------------------------------------------------------------------------
@@ -227,27 +246,29 @@ class Request:
 # -----------------------------------------------------------------------------
 
 class Transaction:
-	"""A transaction encaspulates a request and its responses.
+	"""A transaction encaspulates a request and its (zero or more) responses.
 	
 	Attributes::
 
-		@session			Enclosing session
-		@request			Initiating request
-		@data				Response data
-		@cookies			Response cookies
-		@redirect			Transaction for the redirection (None by default)
-		@done				Tells if the transaction was executed or not
+	- 'session':  enclosing session
+	- 'request':  request
+	- 'data':     data
+	- 'cookies':  cookies
+	- 'redirect': for the redirection (None by default)
+	- 'done':     if the transaction was executed or not
 	
 	"""
 
 	def __init__( self, session, request ):
 		self._client     = session._httpClient
 		self._client.verbose = session.verbose and 1 or 0
-		self._session  = session
-		self._request  = request
-		self._cookies  = Pairs()
-		self._done     = False
-	
+		self._session    = session
+		self._request    = request
+		self._status     = None
+		self._cookies    = Pairs()
+		self._newCookies = None
+		self._done       = False
+
 	def session( self ):
 		"""Returns this transaction session"""
 		return self._session
@@ -256,15 +277,34 @@ class Transaction:
 		"""Returns this transaction request"""
 		return self._request
 
+	def status( self ):
+		"""Returns the session status"""
+		return self._status
+
 	def cookies( self ):
 		"""Returns this transaction cookies (including the new cookies, if the
 		transaction is set to merge cookies)"""
 		return self._cookies
 	
-	def forms( self ):
-		"""Returns a dictionary with the forms contained in the response."""
+	def newCookies( self ):
+		"""Returns the list of new cookies."""
+		return self._newCookies
+
+	def forms( self, name=None ):
+		"""Returns a dictionary with the forms contained in the response. If a
+		'name' is given the form with the given name will be returned."""
 		assert self._done
-		return scrape.HTML.forms(self.data())
+		forms = scrape.HTML.forms(self.data())
+		if name is None:
+			return forms
+		else:
+			return forms.get(name)
+
+	def links( self ):
+		"""Returns a dictionary with the links contained in the response. This
+		makes use of the scraping module."""
+		assert self._done
+		return scrape.HTML.links(self.data())
 
 	def data( self ):
 		"""Returns the response data (implies that the transaction was
@@ -278,13 +318,10 @@ class Transaction:
 	def url( self ):
 		"""Returns the requested URL."""
 		return self.request().url()
-	
-	def newCookies( self ):
-		"""Returns the list of new cookies."""
-		return Pairs(self._client.newCookies())
 
 	def do( self ):
-		"""Executes this transaction"""
+		"""Executes this transaction. This sends the request to the client which
+		actually sends the data to the transport layer."""
 		# We do not do a transaction twice
 		if self._done: return
 		# We prepare the headers
@@ -313,12 +350,15 @@ class Transaction:
 		else:
 			raise Exception("Unsupported method:", request.method())
 		# We merge the new cookies if necessary
+		self._status = self._client.status()
+		self._newCookies = Pairs(self._client.newCookies())
 		self._done = True
 		return self
-	
+
 	def done( self ):
+		"""Tells if the transaction is done/complete."""
 		return self._done
-	
+
 	def __str__( self ):
 		return self.data()
 
@@ -337,13 +377,13 @@ class Session:
 
 	Attributes::
 
-		@host				Session host (by name or IP)
-		@protocol			Session protocol (either HTTP or HTTPS)
-		@transactions		List of transactions
-		@maxTransactions	Maximum number of transactions in registered in
-							this session
-		@cookies			List of cookies for this session
-		@userAgent			String for this user session agent
+	- 'host':            Session host (by name or IP)
+	- 'protocol':        Session protocol (either HTTP or HTTPS)
+	- 'transactions':    List of transactions
+	- 'maxTransactions': Maximum number of transactions in registered in
+	                     this session
+	- 'cookies':         List of cookies for this session
+	- 'userAgent':       String for this user session agent
 
 	"""
 
@@ -384,23 +424,34 @@ class Session:
 		assert self.last(), "No transaction available."
 		return self.last().data()
 
+	def status( self ):
+		"""Returns the status of the last transaction. This is an alias for
+		`self.last().status()`"""
+		assert self.last(), "No transaction available."
+		return self.last().status()
+
 	def url( self ):
 		"""Returns the URL of the last page. This is an alias for
 		`self.last().url()`"""
 		assert self.last(), "No transaction available."
 		return self.last().url()
 
-	def forms( self ):
-		"""Returns a dictionary with the forms contained in the response."""
-		assert self.last(), "No transaction available."
-		return self.last().forms()
-	
 	def form( self, name=None ):
 		"""Returns the first form declared in the last transaction response data."""
-		forms = self.forms()
+		forms = self.forms(name)
 		if not forms: return None
-		if not name: name = forms.keys()[0]
+		if name is None: name = forms.keys()[0]
 		return forms.get(name)
+
+	def forms( self, name=None ):
+		"""Returns a dictionary with the forms contained in the response."""
+		assert self.last(), "No transaction available."
+		return self.last().forms(name)
+
+	def links( self ):
+		"""Returns a list of the links contained in the response."""
+		assert self.last(), "No transaction available."
+		return self.last().links()
 
 	def attach( self, name, filename=None, content=None, mimetype=client.DEFAULT_MIMETYPE ):
 		"""Creates an attachment with the given name for the given `filename` or
@@ -629,4 +680,4 @@ class FireFox(Personality):
 # - Timeout
 # - Exception
 
-# EOF
+# EOF - vim: tw=80 ts=4 sw=4 noet

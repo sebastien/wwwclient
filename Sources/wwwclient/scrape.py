@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 # Encoding: iso-8859-1
-# vim: tw=80 ts=4 sw=4 noet
 # -----------------------------------------------------------------------------
-# Project   : WWWClient - Python client Web toolkit
+# Project   : WWWClient
 # -----------------------------------------------------------------------------
 # Author    : Sebastien Pierre <sebastien@xprima.com>
+# -----------------------------------------------------------------------------
+# License   : GNU Lesser General Public License
+# Credits   : Xprima.com
+# -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
 # Last mod  : 21-Sep-2006
 # -----------------------------------------------------------------------------
@@ -727,4 +730,4 @@ class HTMLTools:
 # We create a shared instance with the scraping tools
 HTML = HTMLTools()
 
-# EOF
+# EOF - vim: tw=80 ts=4 sw=4 noet

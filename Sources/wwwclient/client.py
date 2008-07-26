@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 # Encoding: iso-8859-1
-# vim: tw=80 ts=4 sw=4 noet
 # -----------------------------------------------------------------------------
-# Project   : PyCurl Transaction wrapper
+# Project   : WWWClient
 # -----------------------------------------------------------------------------
-# Author    : Sebastien Pierre <sebastien@xprima.com>
+# Author    : Sebastien Pierre                               <sebastien@ivy.fr>
+# -----------------------------------------------------------------------------
+# License   : GNU Lesser General Public License
+# Credits   : Xprima.com
+# -----------------------------------------------------------------------------
 # Creation  : 04-Jun-2006
 # Last mod  : 21-Sep-2006
 # -----------------------------------------------------------------------------
@@ -42,9 +45,15 @@ DEFAULT_ATTACH_MIMETYPE = 'application/octet-stream'
 # NOTE: A useful reference for understanding HTTP is the following website
 # <http://www.jmarshall.com/easy/http>
 class HTTPClient:
-	"""Abstract class for an HTTPClient"""
+	"""Abstract class for an 'HTTPClient'. As explained in the module
+	documentation, the 'HTTPClient' is a an object-oriented interface to
+	low-level HTTP communication infrastructure. The 'HTTPClient' is stateful,
+	in the sense that it aggregates the status resulting from requests and
+	responses."""
 
 	def __init__( self, encoding="latin-1" ):
+		"""Creates a new HTTPClient with the given 'encoding' as default
+		encofing ('latin-1' is the default)."""
 		self._url        = None
 		self._host       = None
 		self._protocol   = None
@@ -249,7 +258,7 @@ class HTTPClient:
 			location, cookies = self._parseStatefulHeaders(headers)
 			self._redirect   = location
 			self._newCookies.extend(self._parseCookies(cookies))
-			# FIXME: I don't know if it works properly, but at # least it handles
+			# FIXME: I don't know if it works properly, but at least it handles
 			# responses from <http://www.contactor.se/~dast/postit.cgi> properly.
 			if first_line:
 				# If the first line does not start with HTTP, then this may be
@@ -264,7 +273,7 @@ class HTTPClient:
 					res.append([first_line, headers, body])
 		self._responses = res
 		return res
-	
+
 	def _decodeBody( self, body, contentEncoding=None, encoding=None ):
 		if contentEncoding:
 			if contentEncoding.lower().strip() == "gzip":
@@ -276,7 +285,7 @@ class HTTPClient:
 		else:
 			if encoding: return body.decode(encoding)
 			else: return body
-		
+
 	def _parseStatefulHeaders( self, headers ):
 		"""Return the Location and Set-Cookie headers from the given header
 		string."""
@@ -309,4 +318,4 @@ class HTTPClient:
 			res.append((name,value))
 		return res
 
-# EOF
+# EOF - vim: tw=80 ts=4 sw=4 noet

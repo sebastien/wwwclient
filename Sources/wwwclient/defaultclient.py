@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 # Encoding: iso-8859-1
-# vim: tw=80 ts=4 sw=4 noet
 # -----------------------------------------------------------------------------
-# Project   : httplib-based HTTP client
+# Project   : WWWClient
 # -----------------------------------------------------------------------------
-# Author    : Sebastien Pierre <sebastien@xprima.com>
+# Author    : Sebastien Pierre                               <sebastien@ivy.fr>
+# -----------------------------------------------------------------------------
+# License   : GNU Lesser General Public License
+# Credits   : Xprima.com
+# -----------------------------------------------------------------------------
 # Creation  : 04-Jun-2006
 # Last mod  : 04-Jul-2006
 # -----------------------------------------------------------------------------
@@ -13,9 +16,8 @@ import httplib, urlparse, client
 
 # TODO: Add retry support
 class HTTPClient(client.HTTPClient):
-	"""Sends and manages HTTP requests using the PyCURL library. Each instance
-	should be used in a single thread (no sharing), because the same Curl
-	instance is kept by all methods."""
+	"""Sends and manages HTTP requests using the 'httplib' and 'urlparse'
+	modules. Using the 'curlclient' may be more efficient than using this one."""
 
 	def __init__( self, encoding="latin-1" ):
 		client.HTTPClient.__init__(self, encoding)
@@ -91,4 +93,4 @@ class HTTPClient(client.HTTPClient):
 		if self.verbose >= 1: print self.info(), "\n"
 		return res
 
-# EOF
+# EOF - vim: tw=80 ts=4 sw=4 noet

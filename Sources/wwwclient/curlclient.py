@@ -1,21 +1,24 @@
 #!/usr/bin/env python
 # Encoding: iso-8859-1
-# vim: tw=80 ts=4 sw=4 noet
 # -----------------------------------------------------------------------------
-# Project   : PyCurl Transaction wrapper
+# Project   : WWWClient
 # -----------------------------------------------------------------------------
-# Author    : Sebastien Pierre <sebastien@xprima.com>
+# Author    : Sebastien Pierre                               <sebastien@ivy.fr>
+# -----------------------------------------------------------------------------
+# License   : GNU Lesser General Public License
+# Credits   : Xprima.com
+# -----------------------------------------------------------------------------
 # Creation  : 20-Jun-2006
 # Last mod  : 04-Jul-2006
 # -----------------------------------------------------------------------------
 
-import StringIO, urlparse, time, pycurl, client
+import StringIO, urlparse, time, client, pycurl
 
 # TODO: Find more use cases for chunked mode
 # TODO: Add cookie encode/decode functions
 
 __doc__ = """\
-The wwwclient.curl module is a wrapper around the PyCurl module that simplifies
+The 'wwwclient.curl' module is a wrapper around the PyCurl module that simplifies
 writing HTTP clients with curl. This module was designed to be low-level, fast
 and easy to use.
 
@@ -51,7 +54,7 @@ Example:
 This example is of course very basic, but it gives you the general feel about
 how to use it. When looking at the API take care of reading the docstring to
 know what kind of value is expected, as headers are expected to be a list of
-strings, and attachements are expected to be of a specific format (detailes in
+strings, and attachements are expected to be of a specific format (details in
 POST).
 
 """
@@ -185,4 +188,4 @@ class HTTPClient(client.HTTPClient):
 					raise Exception("Unknown attachment type: %s" % (atype))
 		return field_data
 
-# EOF
+# EOF - vim: tw=80 ts=4 sw=4 noet

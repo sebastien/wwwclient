@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 # Encoding: iso-8859-1
-# vim: tw=80 ts=4 sw=4 noet
 # -----------------------------------------------------------------------------
-# Project   : WWWClient - Python client Web toolkit
+# Project   : WWWClient
 # -----------------------------------------------------------------------------
-# Author    : Sebastien Pierre <sebastien@xprima.com>
+# Author    : Sebastien Pierre                               <sebastien@ivy.fr>
+# -----------------------------------------------------------------------------
+# License   : GNU Lesser General Public License
+# Credits   : Xprima.com
+# -----------------------------------------------------------------------------
 # Creation  : 18-Jul-2006
 # Last mod  : 18-Jul-2006
 # -----------------------------------------------------------------------------
@@ -164,4 +167,4 @@ class Contract:
 			if text.find(c) == -1:
 				self.error("String not found: %s" % (repr(c)))
 
-# EOF
+# EOF - vim: tw=80 ts=4 sw=4 noet

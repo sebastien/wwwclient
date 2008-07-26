@@ -1,7 +1,8 @@
 == WWWClient
 == Advanced web browsing, scraping and automation
 -- Author: Sébastien Pierre, XPrima.com
--- Date: 21-Sep-2006
+-- Date:   21-Sep-2006
+-- Update: 26-Jul-2008
 
 
 Python has some well-known web automation and processing tools such as
@@ -12,7 +13,8 @@ web.
 
 However, we experienced limitations using Twill (which is based on Mechanize and
 BeautifulSoup), notably the fact that it was difficult to *fine tune the HTTP
-requests*, or when the *HTML file was broken*.
+requests*, or when the *HTML file was broken* (and you can't imagine how many
+HTML files are broken).
 
 We decided to address these limitations by building a library that would allow
 to write web clients, using a high-level programming interface, while also
@@ -32,9 +34,12 @@ WWWClient is separated in four main modules:
    parse and get information from an HTML or XML document. It is made to be
    versatile and very tolerant to malformed HTML.
 
+ - The `www.forms` module offers a set of objects to represent and manipulate
+   forms easily, while maintaining the most flexibility.
+
 The forthcoming sections will present the *browsing* and *scraping* modules in
 detail. For information on the rest of WWWClient, the best source is the API
-documentation.
+documentation (included as [wwwclient-api.html] in the distribution)
 
 Browsing
 ========
@@ -82,21 +87,21 @@ Accessing a website
     Once you have initiated your session, you usually call any of the following
     operations:
 
-    -   `get()` will send a `GET` request to the given URL
+    -   `get()`  will send a `GET` request to the given URL
     -   `post()` wil send a `POST` request to the given URL
     -   `page()` will return you the HTML data of the current (last) page
     -   `last()` will return you the current (last) transaction
 
     You also have convenience method such as `url()`, `referer()`, or
-    `cookies()` which give you instant access to last transaction or session
-    information.
+    `status()`, `headers()` and `cookies()` which give you instant access to
+    last transaction or session information. See the API for all the details.
 
     So usually, the usage pattern is as follows:
 
     >   session    = browse.Session("http://www.mysite.com")
-    >   some_page  = browse.get("some/page.html").data()
+    >   some_page  = session.get("some/page.html").data()
     >   ...
-    >   other_page = browse.get("some/other/page.html").data()
+    >   other_page = session.get("some/other/page.html").data()
     >   ...
 
     Note that every time that you do a `get` or a `post`, a `Transaction`
@@ -122,13 +127,15 @@ Accessing a website
     - The `follow` parameter tells if redirections should be followed. If not
       you will have to do manually something like :
     
-      >   t = session.get("page.html")
+      >   t = session.get("page.html",follow=False)
       >   while t.redirect(): t = session.get(t.redirect())
       
     - The `do` parameter tells if the transaction should be executed now or
       later. If the transaction is not executed, you can call the `do()`
       transaction method at any time. This allows to prepare transactions
       and execute them at will.
+
+      # TODO: Example
 
     Now that you know the basics of browsing with WWWClient, let's see how to
     post data.
@@ -153,7 +160,6 @@ Posting data
        |
        Here you simply give your parameter as arguments, and they are
        automatically url-encoded in the request URL.
-       
 
     2) Posting with POST and values as parameters::
        |
@@ -247,7 +253,6 @@ Submitting forms
     >   >>> session.forms()
     >   {'formname':<Form instance...>, 'otherform':..., ...}
 
-
     Which will return you a `dict` with form names as keys and `scrape.Form`
     instances as values. Alternatively, you can use `session.form()` to have the
     first form declared in the document (useful when you know that there is only
@@ -268,6 +273,12 @@ Submitting forms
     >   >>> print form.fields()[0]
     >   {'name':'user', 'type':'text', value:''}
 
+    This gives you the full details of the fields, but you can also get a
+    shorter version with only the names:
+
+    >   >>> print form.fieldNames()
+    >   ('name',...)
+
     You may be tempted to change the value of a field directly, but you should
     *use the set() method instead* :
 
@@ -276,11 +287,11 @@ Submitting forms
     this is a better option, because changing the field value attribute will
     overwrite the default form value, while using the `set()` method will
     indicate that you specified a custom value for the field (which can be later
-    cleared, so that the form object can be reused)
+    cleared, so that the form object can be reused).
     
         Note____________________________________________________________________
 
-        If you set values for  _checkboxes_, they will be converted to `on` or
+        If you set values for _checkboxes_, they will be converted to `on` or
         `off`, unless their value is None, in which case they will be considered
         as undefined
 
@@ -320,7 +331,7 @@ Submitting forms
       cases. However, if your request fails, you should try to set `strip` to
       `False` and see if it succeeds like that.
 
-    The session `submit()` method will actually invoke the form `submit()`
+    The session `submit(form)` method will actually invoke the form `submit()`
     method, and then pass the result to the session `post` or `get` method. So
     if you want to see how the forms creates a "submission request body", have a
     look at the `wwwclient.form.Form.submit()` method.
@@ -358,7 +369,8 @@ Tag list and tag tree
 
     WWWClient scraping module is based on the principle that *you should be able
     to scrape HTML using string, list or tree operations*, because it is sometimes
-    easier to identify a substring, extract it, and then work .
+    easier to identify a substring, extract it, and then work on it as subset of
+    your HTML document.
 
     For instance, say you want to extract the ''most popular projects'' from the
     [Freshmeat](http://www.freshmeat.net) home page. By looking at the HTML, you
@@ -388,6 +400,8 @@ Tag list and tag tree
         to the original HTML. That means that if you convert a tag list or a tag
         tree to HTML, you will have *exactly* the same HTML string as the one
         you used to construct the structure.
+
+        _______________________________________________________________________
 
     As an illustration, the Freshmeat most popular projects table looks like
     that:
@@ -554,7 +568,7 @@ Getting to the desired data
     >   find strings or regular ...zesty.ca/python/scrape.py - 31k - Cached -
     >   Similar&nbsp;pages
 
-    with this information, we can confirm that we have extracted the right
+    with this representation, we can confirm that we have extracted the right
     information.
 
     If we want to select a particular subset of a node, like the `<a>` within
@@ -642,7 +656,7 @@ Text processing functions
         The `text()` method automatically strips the tags from your document
         (it is a bit like stripping the tags from a tag list), and returns the
         text version of it. You can set the `expand` and `norm` parameters to
-        pass the result to the corresponding functions.
+        pass the result to the `expand` and `norm` functions
 
     html::
     
@@ -714,4 +728,9 @@ transport layer (provided by the Curl library).
       string when necessary. The given encoding will tell in which encoded the
       string should be coded.
 
-# vim: ts=4 sw=4 et
+Where to get help ?
+===================
+
+If 
+
+# vim: ts=4 sw=4 et syn=kiwi
