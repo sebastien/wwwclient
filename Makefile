@@ -34,7 +34,7 @@ SCRIPTS         = Scripts
 LIBRARY         = Library
 RESOURCES       = Resources
 DISTRIBUTION    = Distribution
-API             = $(DOCUMENTATION)/wwwclient-api.html
+API             = wwwclient-api.html
 DISTROCONTENT   = $(DOCUMENTATION) $(SOURCES) $(SCRIPTS) $(TESTS) $(RESOURCES) \
                   Makefile README ROADMAP LICENSE setup.py
 
@@ -42,7 +42,7 @@ DISTROCONTENT   = $(DOCUMENTATION) $(SOURCES) $(SCRIPTS) $(TESTS) $(RESOURCES) \
 
 PACKAGE         = wwwclient
 MAIN            = __init__.py
-MODULES         = browse scrape form client contract
+MODULES         = browse scrape form client defaultclient curlclient contracts
 
 TEST_MAIN       = $(TESTS)/$(PROJECT)Test.py
 SOURCE_FILES    = $(shell find $(SOURCES) -name "*.py")
@@ -137,9 +137,11 @@ dist:
 	-C $(DISTRIBUTION) $(PROJECT)-$(PROJECT_VERSION)
 	@rm -rf $(DISTRIBUTION)/$(PROJECT)-$(PROJECT_VERSION)
 
-man: README
-	kiwi -m -ilatin-1 README  README.html
+man: README.html ROADMAP.html
 
+%.html: %
+	kiwi -m -ilatin-1 $< $@ 
+	
 doc: man
 	@echo "Generating $(PROJECT) documentation"
 ifeq ($(shell basename spam/$(SDOC)),sdoc)
