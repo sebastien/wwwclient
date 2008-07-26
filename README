@@ -117,7 +117,6 @@ Accessing a website
     And you also have a bunch of other useful methods documented in the API.
 
         Note ________________________________________________________________
-
         You can also directly print a transaction or pass it through the `str`
         method to get its response data.
 
@@ -228,16 +227,13 @@ Posting data
     very easily specify an order for your elements, and then ensure that the
     requests you send are *exactly* how you want them to be.
 
-        Note____________________________________________________________________
-
+        Note ___________________________________________________________________
         When specifying the `data` argument to `post()`, you cannot use
         the `fields` or `attach` arguments : they are exclusive.
-
+        |
         Also, for any more detail on the arguments and/or behaviour of any of
         these functions, have a look at the `wwwclient.client` API
         documentation.
-
-        ________________________________________________________________________
 
 
 Submitting forms
@@ -290,12 +286,9 @@ Submitting forms
     cleared, so that the form object can be reused).
     
         Note____________________________________________________________________
-
         If you set values for _checkboxes_, they will be converted to `on` or
         `off`, unless their value is None, in which case they will be considered
         as undefined
-
-        ______________________________________________________________________
 
     Aside from fields, you can have a list of the form `actions`, which are
     actually the inputs with `type=submit`.
@@ -337,16 +330,13 @@ Submitting forms
     look at the `wwwclient.form.Form.submit()` method.
 
         Note ________________________________________________________________
-
         When _submitting forms_, you can specify whether you want _fields with
         no values_ to be _stripped_ or not. Depending on how the server is
         implemented, this may cause your request to be incorrectly processed or
         not.
-
+        |
         If your request fails to be processed properly, try changing the value
         of the `strip` parameter in form submission methods.
-
-        ______________________________________________________________________
 
 Scraping
 ========
@@ -395,13 +385,10 @@ Tag list and tag tree
     representations.
 
         Note __________________________________________________________________
-
         WWWClient tag list and tag tree were designed to be completely faithful
         to the original HTML. That means that if you convert a tag list or a tag
         tree to HTML, you will have *exactly* the same HTML string as the one
         you used to construct the structure.
-
-        _______________________________________________________________________
 
     As an illustration, the Freshmeat most popular projects table looks like
     that:
@@ -710,27 +697,33 @@ Tips
 Text encoding support
 =====================
 
-As text data may come from various sources, some may be already encoded or not.
-To ensure that proper conversion is made, the following WWWClient elements
-feature an `encoding` property or argument to relevant methods that allows to
-specify in which encoding the given text data is encoded. This will ensure that
-the data is properly converted to raw strings before being passed to the
-transport layer (provided by the Curl library).
+    As text data may come from various sources, some may be already encoded or
+    not.  To ensure that proper conversion is made, the following WWWClient
+    elements feature an `encoding` property or argument to relevant methods that
+    allows to specify in which encoding the given text data is encoded. This
+    will ensure that the data is properly converted to raw strings before being
+    passed to the transport layer (provided by the Curl library).
 
-    Session::
-      Session encoding defines the default encoding for all the requests,
-      cookies, headers, parameters, fields and provided data. Setting a session
-      encoding will set every transaction, request and underlying curl handler
-      encodings to the session one.
+        Session::
+          Session encoding defines the default encoding for all the requests,
+          cookies, headers, parameters, fields and provided data. Setting a session
+          encoding will set every transaction, request and underlying curl handler
+          encodings to the session one.
 
-    Form::
-      when filling values within a form, the values will be converted to
-      string when necessary. The given encoding will tell in which encoded the
-      string should be coded.
+        Form::
+          when filling values within a form, the values will be converted to
+          string when necessary. The given encoding will tell in which encoded the
+          string should be coded.
 
-Where to get help ?
-===================
+Acknowledgments
+===============
 
-If 
+    I would like to thank Marc Carignan from [Xprima.com](http://www.xprima.com)
+    for giving me the opportunity to work on the WWWClient project and let it be
+    open-sourced. This project could not have happened without his help, thanks
+    Marc !
+
+    I would also like to thank the whole Python community for having created
+    such an expressive, powerful language that have pleased me for years.
 
 # vim: ts=4 sw=4 et syn=kiwi
