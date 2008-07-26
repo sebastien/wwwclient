@@ -16,7 +16,7 @@
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os
+import urlparse, urllib, mimetypes, re, os, time
 import client, defaultclient, scrape
 
 HTTP               = "http"
@@ -58,7 +58,7 @@ class Pairs:
 			if i == len(self.pairs):
 				self.add(name,value)
 			else:
-				self.paris[i] = (name,value)
+				self.pairs[i] = (name,value)
 		else:
 			self.add(name, value)
 	

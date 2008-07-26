@@ -67,6 +67,7 @@ class Contract:
 		self.session   = browse.Session()
 		self.HTML      = scrape.HTMLTools()
 		self.errors    = []
+		self.warnings  = []
 		self.provided  = []
 		self.tests     = self._getTests()
 		self.remaining = list(self.tests)
@@ -74,7 +75,6 @@ class Contract:
 
 	def _getTests( self ):
 		res = []
-		items = {}
 		for key in dir(self):
 			if key.startswith("test"):
 				res.append(getattr(self, key))
@@ -156,7 +156,11 @@ class Contract:
 	def expectURL( self, url ):
 		"""Expects the current URL to be like the given URL"""
 		if not self.session.last().url() == url:
-			self.error("Unexpected URL: got %s, expected %s" % (repr(self.session.last().url(), repr(url))))
+			self.error(
+				"Unexpected URL: got %s, expected %s" % (
+					repr(self.session.last().url()),
+					repr(url)
+			))
 
 	def expectText( self, contains=() ):
 		"""Expects various criteria on the current transaction data, once

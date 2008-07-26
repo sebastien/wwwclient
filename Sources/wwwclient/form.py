@@ -103,8 +103,9 @@ class Form:
 
 	def fill( self, **values ):
 		"""Fills this form with the given values."""
-		field_names = map(lambda f:f.get("name"), self.fields())
+		# field_names = map(lambda f:f.get("name"), self.fields())
 		for name, value in values.items():
+			# FIXME: Check that the name exists in the form
 			self.values[name] = value
 		return self
 	
@@ -275,7 +276,7 @@ def parseForms( scraper, html ):
 		elif name == "input":
 			assert current_form
 			# TODO: Make this nicer
-			js = filter(lambda s:s[0].startswith("on"), attributes.items())
+			# js = filter(lambda s:s[0].startswith("on"), attributes.items())
 			# FIXME: Adda a warnings interface
 			#if js:
 			#	print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js

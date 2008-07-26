@@ -1,10 +1,10 @@
 # WWWClient makefile
 # ------------------
 #
-# Revision 1.5.1 (24-Mar-2006)
+# Revision 1.5.2 (26-Jul-2008)
 #
 # Distributed under GPL License
-# (c) XPriam.com, 2006
+# (c) XPrima.com, 2006
 #
 #  This Makefile is intendended for developers only. It allows to automate
 #  common tasks such as checking the code, getting statistics, listing the TODO,
@@ -36,13 +36,13 @@ RESOURCES       = Resources
 DISTRIBUTION    = Distribution
 API             = $(DOCUMENTATION)/wwwclient-api.html
 DISTROCONTENT   = $(DOCUMENTATION) $(SOURCES) $(SCRIPTS) $(TESTS) $(RESOURCES) \
-                  Makefile README setup.py
+                  Makefile README ROADMAP LICENSE setup.py
 
 # Project files_______________________________________________________________
 
 PACKAGE         = wwwclient
 MAIN            = __init__.py
-MODULES         = browse scrape form client
+MODULES         = browse scrape form client contract
 
 TEST_MAIN       = $(TESTS)/$(PROJECT)Test.py
 SOURCE_FILES    = $(shell find $(SOURCES) -name "*.py")
@@ -122,17 +122,6 @@ else
 	@echo "See <http://pychecker.sf.net>"
 endif
 	@echo "done."
-
-libs: 
-	@echo "Making JavaScript libraries"
-	@$(JSJOIN) $(LIBRARY)/prototype/prototype.js \
-						 $(LIBRARY)/prototype/extend.js \
-						 $(LIBRARY)/prototype/eip.js  \
-						 $(LIBRARY)/prototype/effects.js \
-						 $(LIBRARY)/prototype/validation.js > $(LIBRARY)/prototype.js
-	@$(JSJOIN) $(LIBRARY)/railways/railways.js \
-						$(LIBRARY)/railways/html.js \
-						$(LIBRARY)/railways/ui.js > $(LIBRARY)/railways.js
 
 test: $(SOURCE_FILES) $(TEST_FILES)
 	@echo "Testing $(PROJECT)."

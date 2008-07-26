@@ -140,7 +140,6 @@ class TagList:
 		offset    = 0
 		level     = 0 
 		end       = False
-		last      = None
 		if scraper == None: scraper = HTML
 		while not end:
 			tag = scraper.findNextTag(html, offset)
@@ -151,7 +150,6 @@ class TagList:
 			else:
 				tag, tag_end_offset = tag
 				tag_type, tag_name, tag_start, attr_start, attr_end = tag
-				tag_name_lower      = tag_name.lower()
 				# There may be text inbetween
 				if tag_start > offset:
 					self.append(TextTag(html, start=offset,end=tag_start))
@@ -194,6 +192,7 @@ class TagList:
 						node.close(tag)
 				else:
 					if tags_stack and HTML_closeWhen( tag, tags_stack[-1] ):
+						# FIXME: The two variables are not used
 						parent_tag = tags_stack.pop()
 						closing_tag = ElementTag(tag._html, tag.start, tag.start, type=Tag.CLOSE)
 						parents.pop().close(tag)
@@ -214,14 +213,14 @@ class TagList:
 		"""Converts this tags list to HTML"""
 		res = []
 		for tag in self.content:
-			assert isinstance(tag, Tag) or isinstance(tag, Text)
+			assert isinstance(tag, Tag) or isinstance(tag, TextTag)
 			res.append(tag.html())
 		return "".join(res)
 	
 	def innerhtml(self):
 		res = []
 		for tag in self.content[1:-1]:
-			assert isinstance(tag, Tag) or isinstance(tag, Text)
+			assert isinstance(tag, Tag) or isinstance(tag, TextTag)
 			res.append(tag.html())
 		return "".join(res)
 
@@ -356,9 +355,9 @@ class TagTree:
 		#        by 'id', 'idLike'
 		#        by 'class', 'classLike'
 		if not withDepth is None: raise Exception("Not implemented")
-		if self.startTag and isinstance(self.startTag, TextTag): return ()
+		if self.startTag and isinstance(self.startTag, TextTag): return []
 		if self.startTag and self.startTag.nameLike(withName):
-			return (self,)
+			return [self]
 		else:
 			res = []
 			for c in self.children:
@@ -649,7 +648,7 @@ class HTMLTools:
 			return None
 		n = RE_HTMLEND.search(html, m.end())
 		if n == None:
-			return HTMLTools.findNextTag(html, m.end())
+			return HTMLTools.findNextTag(self, html, m.end())
 		if m.group()[1] == "/": tag_type = Tag.CLOSE
 		elif n.group()[0] == "/": tag_type = Tag.EMPTY
 		else: tag_type = Tag.OPEN
