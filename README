@@ -1,4 +1,4 @@
-== WWWClient
+== WWWClient 0.9.1
 == Advanced web browsing, scraping and automation
 -- Author: Sébastien Pierre
 -- Date:   21-Sep-2006
@@ -19,6 +19,13 @@ HTML files are broken).
 We decided to address these limitations by building a library that would allow
 to write web clients, using a high-level programming interface, while also
 allowing fine-grained control over the HTTP communication level.
+
+WWWClient is a web browsing, scraping and automation client and library that can
+easily be used using an interpreter (like 'ipython') or embedded within a
+program. WWWClient offers both a high-level API and fine-grain control over
+low-level HTTP and web specific elements, as well as a powerful scraping API
+that lets you manipulate your HTML document using string, list and tree
+operations at the same time. 
 
 WWWClient is separated in four main modules:
 
