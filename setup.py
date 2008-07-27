@@ -16,7 +16,7 @@ from distutils.core import setup
 
 PROJECT     = "WWWClient"
 LICENSE     = "Lesser GNU General Public License"
-VERSION     = "0.9.1"
+VERSION     = "0.9.2"
 SUMMARY     = "Advanced Web Browsing, Scraping And Automation"
 DESCRIPTION = """\
 WWWClient is a web browsing, scraping and automation client and library that can
