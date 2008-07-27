@@ -137,11 +137,8 @@ dist:
 	-C $(DISTRIBUTION) $(PROJECT)-$(PROJECT_VERSION)
 	@rm -rf $(DISTRIBUTION)/$(PROJECT)-$(PROJECT_VERSION)
 
-man: README.html ROADMAP.html
+man:
 
-%.html: %
-	kiwi -m -ilatin-1 $< $@ 
-	
 doc: man
 	@echo "Generating $(PROJECT) documentation"
 ifeq ($(shell basename spam/$(SDOC)),sdoc)
