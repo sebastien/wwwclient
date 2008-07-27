@@ -149,7 +149,7 @@ class Request:
 		else:
 			raise Exception("Expected file or content")
 
-	def __init__( self, method=GET, url="/", fields=None, attach=(),
+	def __init__( self, method=GET, url =None, host=None, fields=None, attach=(),
 	params=None, headers=None, data=None,  mimetype=None ):
 		self._method      = method.upper()
 		self._url         = url
@@ -174,7 +174,7 @@ class Request:
 		return self._method
 
 	def url( self ):
-		"""Returns this request url"""
+		"""Returns this request url, including the parameters"""
 		if self._params.pairs:
 			if self._method == POST and self._data != None or self._attachments:
 				return self._url
@@ -261,7 +261,6 @@ class Transaction:
 
 	def __init__( self, session, request ):
 		self._client     = session._httpClient
-		self._client.verbose = session.verbose and 1 or 0
 		self._session    = session
 		self._request    = request
 		self._status     = None
@@ -327,6 +326,7 @@ class Transaction:
 		# We prepare the headers
 		request  = self.request()
 		headers  = request.headers() 
+		self._session._log(request.method(), request.url())
 		# We merge the session cookies into the request
 		request.cookies().merge(self.session().cookies())
 		# As well as this transaction cookies
@@ -391,7 +391,7 @@ class Session:
 	DEFAULT_RETRIES  = 5
 	DEFAULT_DELAY    = 1
 
-	def __init__( self, url=None, verbose=False, personality=None, follow=True, do=True ):
+	def __init__( self, url=None, verbose=True, personality=None, follow=True, do=True ):
 		"""Creates a new session at the given host, and for the given
 		protocol."""
 		self._httpClient      = defaultclient.HTTPClient()
@@ -402,12 +402,36 @@ class Session:
 		self._userAgent       = "Mozilla/5.0 (X11; U; Linux i686; fr; rv:1.8.0.4) Gecko/20060608 Ubuntu/dapper-security"
 		self._maxTransactions = self.MAX_TRANSACTIONS
 		self._referer         = None
-		self.verbose          = verbose
+		self._verbose         = None
+		self._onLog           = None
 		self._follow          = follow
 		self._do              = do
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
+		self.verbose(verbose)
 		if url: self.get(url)
+
+	def verbose( self, status=None ):
+		"""Returns the verbose status if no argument is given, ortherwise takes
+		a boolean that will define the verbose status."""
+		if status is None:
+			return self._status
+		else:
+			self._status = status and 1 or 0
+			self._httpClient.verbose = self._status
+			return self._status
+
+	def _log( self, *args ):
+		"""Logs data to stdout or forwards it to self._onLog"""
+		if self._onLog:
+			self._onLog(*args)
+		else:
+			print " ".join(map(str,args))
+
+	def setLogger( self, callback ):
+		"""Sets the logger callback (only enabled when the session is set to
+		'verbose'"""
+		self._onLog = self._httpClient._onLog = callback
 
 	def cookies( self ):
 		return self._cookies
@@ -506,7 +530,7 @@ class Session:
 		if follow is None: follow = self._follow
 		if do is None: do = self._do
 		# TODO: Return data instead of session
-		url         = self.__processURL(url)
+		url = self.__processURL(url)
 		request     = self._createRequest( url=url, params=params, headers=headers )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)

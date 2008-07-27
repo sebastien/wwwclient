@@ -60,19 +60,26 @@ class HTTPClient(client.HTTPClient):
 	def _prepareRequest( self, url, headers=(), body=None, method="GET" ):
 		assert self._http == None, "Only one request is allowed per instance"
 		self._url  = url = self._absoluteURL(url)
-		host = self.host()
-		if not host: host = urlparse.urlparse(self._url)[1]
+		url_parsed = urlparse.urlparse(url)
+		host       = url_parsed[1] or self.host()
+		if not host:
+			raise Exception("No host defined for request: %s" % (url))
+		i = url.find(host)
+		if i == -1:
+			raise Exception("Url does not correspond to current host (%s): %s " % (host, url))
+		url_path = url[i+len(host):]
 		self._http = httplib.HTTPConnection(host)
 		http_headers = {}
 		for header in headers:
 			colon = header.find(":")
 			http_headers[header[:colon].strip()] = header[colon+1:]
-		request  = self._http.request(method, url, body, http_headers)
-		# print "=---------------------------------------"
-		# print method, url, host
-		# print headers
-		# print body
-		# print "=---------------------------------------"
+		print "=---------------------------------------"
+		print host
+		print method, url_path
+		print headers
+		print body
+		print "=---------------------------------------"
+		request  = self._http.request(method, url_path, body, http_headers)
 		return request
 
 	def _performRequest( self, counter=0 ):
@@ -90,7 +97,8 @@ class HTTPClient(client.HTTPClient):
 		self._parseResponse(res)
 		if self._http: self._http.close()
 		self._http = None
-		if self.verbose >= 1: print self.info(), "\n"
+		if self.verbose >= 1:
+			self._log(self.info())
 		return res
 
 # EOF - vim: tw=80 ts=4 sw=4 noet

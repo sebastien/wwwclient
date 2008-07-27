@@ -534,7 +534,7 @@ class HTMLTools:
 		elif isinstance(data, TagTree):
 			return data.html()
 		else:
-			raise Exception("Unsupported data:" + data)
+			raise Exception("Unsupported data:" + repr(data))
 
 	# TEXT OPERATIONS
 	# ========================================================================

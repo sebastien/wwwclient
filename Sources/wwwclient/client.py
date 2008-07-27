@@ -22,6 +22,10 @@ to have the response a string.
 
 The HTTPClient class has a fast response parser that is able to update
 important information withing the client.
+
+HTTPClient subclasses are instanciated and bound to every session. As HTTPClient
+are stateful (they aggregate session state), they are not meant to be shared
+among different sessions.
 """
 
 # TODO: Find more use cases for chunked mode
@@ -61,10 +65,18 @@ class HTTPClient:
 		self._redirect   = None
 		self._newCookies = None
 		self._responses  = None
+		self._onLog      = None
 		self.verbose     = 0
 		self.encoding    = encoding
 		self.retryDelay  = 0.100
 		self.retryCount  = 5
+
+	def _log( self, *args ):
+		"""Logs data to stdout or forwards it to self._onLog"""
+		if self._onLog:
+			self._onLog(*args)
+		else:
+			print " ".join(map(str,args))
 
 	def url( self ):
 		"""Returns the last URL processed by this Curl HTTP interface."""
@@ -104,6 +116,13 @@ class HTTPClient:
 		"""Returns the last response data."""
 		if not self._responses: return None
 		else: return self._responses[-1][-1]
+	
+	def dataSize( self ):
+		"""Returns the total size of the responses."""
+		total = 0
+		for r in self._responses:
+			total += len(r)
+		return total
 
 	def info( self ):
 		return "\n".join((
@@ -111,7 +130,7 @@ class HTTPClient:
 			"Status       : %s" % (self.status()),
 			"Redirect     : %s" % (self.redirect()),
 			"New-Cookies  : %s" % (self.newCookies()),
-			"Responses    : %s" % (len(self.responses())),
+			"Responses    : %s [%sb]" % (len(self.responses()),self.dataSize()),
 		))
 
 	def encode( self, fields=(), attach=() ):
