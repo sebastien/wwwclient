@@ -9,7 +9,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 04-Jun-2006
-# Last mod  : 21-Sep-2006
+# Last mod  : 27-Sep-2006
 # -----------------------------------------------------------------------------
 
 import re, mimetypes, urllib, zlib
@@ -241,7 +241,9 @@ class HTTPClient:
 		body), all as unparsed stings."""
 		res     = []
 		off     = 0
+		body    = ""
 		self._newCookies = []
+		# FIXME: I don't get why we need to iterate here
 		while off < len(message):
 			eol = message.find(CRLF, off)
 			eoh = message.find(CRLF + CRLF, off)
@@ -269,11 +271,12 @@ class HTTPClient:
 				# CRLF + CRLF only (this is what google.com returns)
 				off        = message.find(CRLF + CRLF, eoh + 4)
 				if off == -1: off = len(message) 
-				body       = self._decodeBody(message[eoh+4:off], content_encoding, encoding)
-			# Or there is simply no body
+				body      += self._decodeBody(message[eoh+4:off], content_encoding, encoding)
+			# Otherwise the body is simply what's left after the headers
 			else:
-				off        = eoh + 4
-				body       = None
+				if len(message) > eoh+4:
+					body += self._decodeBody(message[eoh+4:], content_encoding, encoding)
+				off = len(message)
 			location, cookies = self._parseStatefulHeaders(headers)
 			self._redirect   = location
 			self._newCookies.extend(self._parseCookies(cookies))

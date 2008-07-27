@@ -73,12 +73,12 @@ class HTTPClient(client.HTTPClient):
 		for header in headers:
 			colon = header.find(":")
 			http_headers[header[:colon].strip()] = header[colon+1:]
-		print "=---------------------------------------"
-		print host
-		print method, url_path
-		print headers
-		print body
-		print "=---------------------------------------"
+		#print "=---------------------------------------"
+		#print host
+		#print method, url_path
+		#print headers
+		#print body
+		#print "=---------------------------------------"
 		request  = self._http.request(method, url_path, body, http_headers)
 		return request
 
