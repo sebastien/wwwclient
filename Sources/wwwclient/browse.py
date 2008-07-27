@@ -409,7 +409,6 @@ class Session:
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
 		self.verbose(verbose)
-		self.asFireFox()
 		if url: self.get(url)
 
 	def verbose( self, status=None ):

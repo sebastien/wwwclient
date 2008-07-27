@@ -10,7 +10,7 @@ HTML = scrape.HTML
 session  = browse.Session("www.freshmeat.net", follow=True)
 
 print session.page()
-page     = session.page()
+page = session.page()
 # 
 # most_popular = page.find("MOST POPULAR PROJECTS")
 # table        = page.find("<table", most_popular)

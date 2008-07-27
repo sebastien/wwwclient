@@ -114,9 +114,13 @@ class HTTPClient:
 
 	def data( self ):
 		"""Returns the last response data."""
-		if not self._responses: return None
-		else: return self._responses[-1][-1]
-	
+		if not self._responses:
+			return ""
+		elif len(self._responses) == 1:
+			return self._responses[0][-1]
+		else:
+			return "".join(r[-1] for r in self._responses)
+
 	def dataSize( self ):
 		"""Returns the total size of the responses."""
 		total = 0
@@ -264,7 +268,7 @@ class HTTPClient:
 			if content_length:
 				content_length = int(content_length.group(1))
 				off        = eoh + 4 + content_length
-				body       = self._decodeBody(message[eoh+4:off], content_encoding, encoding)
+				body       += self._decodeBody(message[eoh+4:off], content_encoding, encoding)
 			# Otherwise, the transfer type may be chunks
 			elif is_chunked:
 				# FIXME: For the moment, chunks are supposed to be separated by
