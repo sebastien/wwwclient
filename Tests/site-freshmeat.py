@@ -7,7 +7,7 @@ HTML = scrape.HTML
 
 # Interestingly, there is a bug (or a trick) for the Freshmeat website, where
 # the returned `Location` header is growing:
-session  = browse.Session("www.freshmeat.net", follow=False)
+session  = browse.Session("www.freshmeat.net", follow=True)
 
 print session.page()
 page     = session.page()

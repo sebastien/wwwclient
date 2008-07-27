@@ -409,6 +409,7 @@ class Session:
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
 		self.verbose(verbose)
+		self.asFireFox()
 		if url: self.get(url)
 
 	def verbose( self, status=None ):
@@ -432,6 +433,20 @@ class Session:
 		"""Sets the logger callback (only enabled when the session is set to
 		'verbose'"""
 		self._onLog = self._httpClient._onLog = callback
+
+	def asFireFox( self ):
+		"""Sets this session personality to be FireFox. This returns the
+		'FireFox' personaly instance that will be bound to this session, you can
+		later change it."""
+		return self.setPersonality(FireFox())
+
+	def setPersonality( self, personality ):
+		self._personality = personality
+		return personality
+
+	def personality( self ):
+		"""Returns the personality bound to this session."""
+		return self._personality
 
 	def cookies( self ):
 		return self._cookies
@@ -671,22 +686,36 @@ class Personality:
 	Personalities allow to ensure that specific headers are set in all requests,
 	so that the requests really look like they come from a specific browser."""
 
-	def __init__( self, useragent ):
-		self.userAgent = useragent
+	def __init__( self ):
+		pass
 	
 	def apply( self, request ):
 		pass
 
 class FireFox(Personality):
-
-	UBUNTU_DAPPER = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.8.0.5) Gecko/20060731" \
-	              + "Ubuntu/dapper-security Firefox+SPY/1.5.0.1"
+	"""Simulates the way FireFox would behave."""
 
 	def __init__( self ):
-		Personality.__init__(self, self.UBUNTU_DAPPER)
+		Personality.__init__(self)
+		self.desktop        = "X11"
+		self.platform       = "Linux i686"
+		self.languages      = "en-US"
+		self.revision       = "1.9"
+		self.geckoVersion   = "2008061015"
+		self.firefoxVersion = "3.0"
+
+	def userAgent( self ):
+		return "Mozilla/5.0 (%s; U; %s; %s; rv:%s) Gecko/%s Firefox/%s" % (
+			self.desktop,
+			self.platform,
+			self.languages,
+			self.revision,
+			self.geckoVersion,
+			self.firefoxVersion,
+		)
 
 	def apply( self, request ):
-		request.header( "User-Agent", self.userAgent)
+		request.header( "User-Agent", self.userAgent())
 		request.header( "Accept",
 		"text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5"
 		)
