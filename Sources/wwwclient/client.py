@@ -245,18 +245,19 @@ class HTTPClient:
 		body), all as unparsed stings."""
 		res     = []
 		off     = 0
-		body    = ""
 		self._newCookies = []
 		# FIXME: I don't get why we need to iterate here
+		# (it's probably when you have multiple responses)
 		while off < len(message):
-			eol = message.find(CRLF, off)
-			eoh = message.find(CRLF + CRLF, off)
+			body = ""
+			eol  = message.find(CRLF, off)
+			eoh  = message.find(CRLF + CRLF, off)
 			if eol == -1: break
 			if eoh == -1: eoh = len(message)
-			first_line     = message[off:eol]
-			headers        = message[eol+2:eoh]
-			charset        = RE_CHARSET.search(headers)
-			is_chunked     = RE_CHUNKED.search(headers)
+			first_line       = message[off:eol]
+			headers          = message[eol+2:eoh]
+			charset          = RE_CHARSET.search(headers)
+			is_chunked       = RE_CHUNKED.search(headers)
 			content_length   = RE_CONTENT_LENGTH.search(headers)
 			content_encoding = RE_CONTENT_ENCODING.search(headers)
 			if content_encoding: content_encoding = content_encoding.group(1)
@@ -268,35 +269,34 @@ class HTTPClient:
 			if content_length:
 				content_length = int(content_length.group(1))
 				off        = eoh + 4 + content_length
-				body       += self._decodeBody(message[eoh+4:off], content_encoding, encoding)
+				body       = self._decodeBody(message[eoh+4:off], content_encoding, encoding)
 			# Otherwise, the transfer type may be chunks
 			elif is_chunked:
 				# FIXME: For the moment, chunks are supposed to be separated by
 				# CRLF + CRLF only (this is what google.com returns)
 				off        = message.find(CRLF + CRLF, eoh + 4)
 				if off == -1: off = len(message) 
-				body      += self._decodeBody(message[eoh+4:off], content_encoding, encoding)
+				body       = self._decodeBody(message[eoh+4:off], content_encoding, encoding)
 			# Otherwise the body is simply what's left after the headers
 			else:
 				if len(message) > eoh+4:
-					body += self._decodeBody(message[eoh+4:], content_encoding, encoding)
+					body = self._decodeBody(message[eoh+4:], content_encoding, encoding)
 				off = len(message)
 			location, cookies = self._parseStatefulHeaders(headers)
 			self._redirect   = location
 			self._newCookies.extend(self._parseCookies(cookies))
 			# FIXME: I don't know if it works properly, but at least it handles
 			# responses from <http://www.contactor.se/~dast/postit.cgi> properly.
-			if first_line:
-				# If the first line does not start with HTTP, then this may be
-				# the rest of the body from a previous response
-				if not first_line.startswith("HTTP"):
-					if not res: continue
-					res[-1][-1] = res[-1][-1] + CRLF + CRLF + first_line
-					if headers: res[-1][-1] = res[-1][-1] + headers
-					if body: res[-1][-1] = res[-1][-1] + body 
-				# Otherwise we have new response
-				else:
-					res.append([first_line, headers, body])
+			if first_line and first_line.startswith("HTTP"):
+				res.append([first_line, headers, body])
+			# If the first line does not start with HTTP, then this may be
+			# the rest of the body from a previous response
+			else:
+				assert res, "There must be a first line"
+				res[-1][-1] = res[-1][-1] + CRLF + CRLF + first_line
+				if headers: res[-1][-1] = res[-1][-1] + headers
+				if body: res[-1][-1] = res[-1][-1] + body 
+
 		self._responses = res
 		return res
 
