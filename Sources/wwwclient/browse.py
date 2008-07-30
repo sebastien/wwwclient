@@ -285,6 +285,12 @@ class Transaction:
 		transaction is set to merge cookies)"""
 		return self._cookies
 	
+	def headers( self ):
+		"""Returns the headers received by the response."""
+		# TODO: IMPLEMENT ME
+		assert None, "Not implemented"
+
+	
 	def newCookies( self ):
 		"""Returns the list of new cookies."""
 		return self._newCookies
@@ -633,6 +639,16 @@ class Session:
 			time.sleep(delay)
 			retry -= 1
 		return res
+
+	def savePage(self, path, transaction=None):
+		"""Saves the page from the given transaction (default it 'last()') to
+		the given file."""
+		if transaction is None: transaction = self.last()
+		d = transaction.data()
+		print type(d)
+		f = file(path,'w')
+		f.write(d)
+		f.close()
 
 	def __processURL( self, url ):
 		"""Processes the given URL, by storing the host and protocol, and
