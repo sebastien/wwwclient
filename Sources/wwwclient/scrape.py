@@ -413,17 +413,19 @@ class TagTree:
 				res =  "#root\n"
 			else:
 				res =  self.startTag.name() 
+				res += "["
 				if self.id != None: res += "#%d" % (self.id) 
 				attr  = []
 				for k,v in self.attributes().items():attr.append("%s=%s" % (k,v))
-				attr = ", ".join(attr)
-				res += "@%d:%s\n" % (self.depth(), attr)
+				attr = ",".join(attr)
+				if attr: attr = "(%s)" % (attr)
+				res += "@%d]%s\n" % (self.depth(), attr)
 			for c in self.children:
 				ctext = ""
 				for line in c.asText().split("\n"):
 					if not line: continue
 					if not ctext:
-						ctext  = "+-- " + line + "\n"
+						ctext  = "   <" + line + "\n"
 					else:
 						ctext += "    " + line + "\n"
 				res += ctext
