@@ -296,7 +296,6 @@ class HTTPClient:
 				res[-1][-1] = res[-1][-1] + CRLF + CRLF + first_line
 				if headers: res[-1][-1] = res[-1][-1] + headers
 				if body: res[-1][-1] = res[-1][-1] + body 
-
 		self._responses = res
 		return res
 
@@ -315,6 +314,9 @@ class HTTPClient:
 	def _parseStatefulHeaders( self, headers ):
 		"""Return the Location and Set-Cookie headers from the given header
 		string."""
+		# We add an extra carriage, because some regexes will expect a carriage
+		# return at the end
+		headers += "\r\n"
 		location    = RE_LOCATION.search(headers)
 		if location: location = location.group(1).strip()
 		set_cookie = RE_SET_COOKIE.search(headers)

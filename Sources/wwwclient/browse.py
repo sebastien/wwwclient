@@ -572,6 +572,8 @@ class Session:
 		if follow is None: follow = self._follow
 		if do is None: do = self._do
 		url = self.__processURL(url)
+		if params != None and not isinstance(params, Pairs):
+			params = Pairs(params)
 		request     = self._createRequest(
 			method=POST, url=url, fields=fields, params=params, attach=attach,
 			data=data, mimetype=mimetype, headers=headers
