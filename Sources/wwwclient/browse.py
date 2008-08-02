@@ -68,12 +68,15 @@ class Pairs:
 			if name.lower().strip() == key.lower().strip():
 				return value
 		return None
-	
+
 	def add( self, name, value=None ):
 		"""Adds the given value to the given name. This does not destroy what
-		already existed."""
-		pair = (name,value)
-		if pair not in self.pairs: self.pairs.append((name, value))
+		already existed. (if the pair already exists, it is not added twice."""
+		if type(name) == tuple and len(name) == 2:
+			if name not in self.pairs: self.pairs.append(name)
+		else:
+			pair = (name,value)
+			if pair not in self.pairs: self.pairs.append((name, value))
 	
 	def clear( self, name ):
 		"""Clears all the (name,values) pairs which have the given name."""
@@ -81,16 +84,19 @@ class Pairs:
 
 	def merge( self, parameters ):
 		"""Merges the given parameters into this parameters list."""
-		if parameters == None: return
+		if parameters == None: return self
 		if type(parameters) == dict:
 			for name, value in parameters.items():
 				self.add(name, value)
 		elif type(parameters) in (tuple, list):
 			for name, value in parameters:
 				self.add(name, value)
-		else:
+		elif isinstance(parameters, Pairs):
 			for name, value in parameters.pairs:
 				self.add(name, value)
+		else:
+			raise Exception("Pair.merge: Unsupported type for merging %s" % (parameters))
+		return self
 
 	def asURL( self ):
 		"""Returns an URL-encoded version of this parameters list."""
@@ -111,6 +117,15 @@ class Pairs:
 	def asFields( self ):
 		"""Returns a list of (name, value) couples."""
 		return list(self.pairs)
+
+	def __getitem__( self, k ):
+		if type(k) == int:
+			return self.pairs[k]
+		else:
+			return self.get(k)
+
+	def __len__(self):
+		return len(self.pairs)
 
 	def __repr__(self):
 		return repr(self.pairs)
@@ -150,11 +165,11 @@ class Request:
 			raise Exception("Expected file or content")
 
 	def __init__( self, method=GET, url =None, host=None, fields=None, attach=(),
-	params=None, headers=None, data=None,  mimetype=None ):
+	params=None, headers=None, data=None,  cookies=None, mimetype=None ):
 		self._method      = method.upper()
 		self._url         = url
 		self._params      = Pairs(params)
-		self._cookies     = Pairs()
+		self._cookies     = Pairs().merge(cookies)
 		self._headers     = Pairs(headers)
 		self._data        = data
 		self._fields      = Pairs(fields)
@@ -532,7 +547,7 @@ class Session:
 		else:
 			self._referer = value
 
-	def get( self, url="/", params=None, headers=None, follow=None, do=None ):
+	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None ):
 		"""Gets the page at the given URL, with the optional params (as a `Pair`
 		instance), with the given headers.
 
@@ -545,7 +560,7 @@ class Session:
 		if do is None: do = self._do
 		# TODO: Return data instead of session
 		url = self.__processURL(url)
-		request     = self._createRequest( url=url, params=params, headers=headers )
+		request     = self._createRequest( url=url, params=params, headers=headers, cookies=cookies )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		# We do the transaction
@@ -558,7 +573,7 @@ class Session:
 		return transaction
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
-	fields=None, attach=None, headers=None, follow=None, do=None ):
+	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None ):
 		"""Posts data to the given URL. The optional `params` (`Pairs`) or `data`
 		contain the posted data. The `mimetype` describes the mimetype of the data
 		(if it is a special kind of data). The `fields` is a `Pairs` instance of
@@ -576,7 +591,7 @@ class Session:
 			params = Pairs(params)
 		request     = self._createRequest(
 			method=POST, url=url, fields=fields, params=params, attach=attach,
-			data=data, mimetype=mimetype, headers=headers
+			data=data, mimetype=mimetype, headers=headers, cookies=cookies
 		)
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
@@ -589,7 +604,7 @@ class Session:
 		return transaction
 
 	def submit( self, form, values={}, attach=[], action=None,  method=POST,
-	do=None, strip=True ):
+	do=None, cookies=None, strip=True ):
 		"""Submits the given form with the current values and action (first
 		action by default) to the form action url, and doing
 		a POST or GET with the resulting values (POST by default).
@@ -608,10 +623,10 @@ class Session:
 		fields = form.submit(action=action, strip=strip, **values)
 		# FIXME: Manage encodings consistently
 		if method == POST or attach:
-			return self.post( url, fields=fields, attach=attach, do=do )
+			return self.post( url, fields=fields, attach=attach, do=do, cookies=cookies )
 		elif method == GET:
 			assert not attach, "Attachments are incompatible with GET submission"
-			return self.get( url,  params=fields, do=do )
+			return self.get( url,  params=fields, do=do, cookies=cookies )
 		else:
 			raise SessionException("Unsupported method for submit: " + method)
 
