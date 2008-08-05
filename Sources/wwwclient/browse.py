@@ -9,7 +9,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 26-Jul-2006
+# Last mod  : 30-Jul-2006
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
@@ -300,6 +300,12 @@ class Transaction:
 		transaction is set to merge cookies)"""
 		return self._cookies
 	
+	def headers( self ):
+		"""Returns the headers received by the response."""
+		# TODO: IMPLEMENT ME
+		assert None, "Not implemented"
+
+	
 	def newCookies( self ):
 		"""Returns the list of new cookies."""
 		return self._newCookies
@@ -491,10 +497,14 @@ class Session:
 
 	def form( self, name=None ):
 		"""Returns the first form declared in the last transaction response data."""
-		forms = self.forms(name)
-		if not forms: return None
-		if name is None: name = forms.keys()[0]
-		return forms.get(name)
+		form = self.forms(name)
+		if not form: return None
+		if name is None:
+			if form:
+				return form.values()[0]
+			else:
+				return None
+		return form
 
 	def forms( self, name=None ):
 		"""Returns a dictionary with the forms contained in the response."""
@@ -646,6 +656,16 @@ class Session:
 			time.sleep(delay)
 			retry -= 1
 		return res
+
+	def savePage(self, path, transaction=None):
+		"""Saves the page from the given transaction (default it 'last()') to
+		the given file."""
+		if transaction is None: transaction = self.last()
+		d = transaction.data()
+		print type(d)
+		f = file(path,'w')
+		f.write(d)
+		f.close()
 
 	def __processURL( self, url ):
 		"""Processes the given URL, by storing the host and protocol, and
