@@ -296,6 +296,7 @@ class HTTPClient:
 				res[-1][-1] = res[-1][-1] + CRLF + CRLF + first_line
 				if headers: res[-1][-1] = res[-1][-1] + headers
 				if body: res[-1][-1] = res[-1][-1] + body 
+		# TODO: It would be good to communicate headers and first_line back
 		self._responses = res
 		return res
 
