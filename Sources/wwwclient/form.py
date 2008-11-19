@@ -271,15 +271,23 @@ def parseForms( scraper, html ):
 			# is two <form name='...> with the same name (yes, this can
 			# happen !)
 			if not forms.has_key(form_name):
-				current_form = Form(form_name, scraper.expand(attributes.get("action")))
+				if not attributes.get("action"):
+					action= None
+				else:
+					action= scraper.expand(attributes.get("action"))
+				current_form = Form(form_name, action)
 				forms[current_form.name] = current_form
 		elif name == "input":
-			assert current_form
+			#assert current_form
 			# TODO: Make this nicer
 			# js = filter(lambda s:s[0].startswith("on"), attributes.items())
 			# FIXME: Adda a warnings interface
 			#if js:
 			#	print "Warning: Form may contain JavaScript: ", current_form.name, "input", attributes.get("name"), js
+			if not current_form:
+				# Found an INPUT type without FORM.. maybe JavaScript tricks
+				current_form= Form("no_form")
+				forms[current_form.name] = current_form
 			current_form._addInput(attributes)
 		elif name == "select":
 			assert current_form
