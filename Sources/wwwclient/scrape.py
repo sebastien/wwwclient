@@ -9,7 +9,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 30-Jul-2008
+# Last mod  : 12-Nov-2008
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -63,7 +63,8 @@ class Tag:
 	def html( self ):
 		"""Returns the HTML representation of this tag."""
 		return self._html[self.start:self.end]
-		
+
+
 	def __repr__( self ):
 		return repr(self._html[self.start:self.end])
 
@@ -91,6 +92,7 @@ class ElementTag(Tag):
 		"""Tells if this tag has the given attribute"""
 		return self.attributes().has_key(name)
 
+
 	def get( self, name ):
 		"""Returns the given attribute set for this tag."""
 		return self.attributes().get(name)
@@ -114,10 +116,36 @@ class ElementTag(Tag):
 		else:
 			return what.match(self.name(), re.I)
 
+	def hasClass( self, name ):
+		"""Tells if the element has the given class (case sensitive)"""
+		element_class = self.attributes().get("class")
+		if element_class and name in element_class.split() != -1:
+			return True
+		else:
+			return False
+
+	def hasId( self, name ):
+		"""Tells if the element has the given id (case sensitive)"""
+		return self.attributes.get("id") == name
+
+	def text(self):
+		return ''
+
 class TextTag(Tag):
 
 	def __init__( self, html, start, end):
 		Tag.__init__(self, html, start, end)
+
+	def hasClass( self, name ):
+		"""Tells if the element has the given class (case sensitive)"""
+		return False
+
+	def hasId( self, name ):
+		"""Tells if the element has the given id (case sensitive)"""
+		return False
+
+	def text(self):
+		return self._html[self.start:self.end]
 
 class TagList:
 
@@ -222,6 +250,12 @@ class TagList:
 		for tag in self.content[1:-1]:
 			assert isinstance(tag, Tag) or isinstance(tag, TextTag)
 			res.append(tag.html())
+		return "".join(res)
+
+	def text(self):
+		res = []
+		for tag in self.content:
+			res.append(tag.text())
 		return "".join(res)
 
 	def __iter__( self ):
@@ -330,6 +364,8 @@ class TagTree:
 			return root
 
 	def filter( self, reject=None, accept=None, recursive=False ):
+		"""Returns a clone of this tree where each child node is filtered
+		through the given 'accept' or 'reject' predicate."""
 		res  = []
 		root = self.clone(children=res)
 		for child in self.children:
@@ -348,20 +384,18 @@ class TagTree:
 					root.append(child.clone())
 		return root
 
-	def find( self, withName, withDepth=None ):
-		# FIXME:
-		# Search by 'name', 'nameLike'
-		#        by 'attributes', 'attributesLike'
-		#        by 'id', 'idLike'
-		#        by 'class', 'classLike'
-		if not withDepth is None: raise Exception("Not implemented")
-		if self.startTag and isinstance(self.startTag, TextTag): return []
-		if self.startTag and self.startTag.nameLike(withName):
+	def find( self, predicate, recursive=True ):
+		"""Returns a list of child nodes that match the given predicate. This
+		operation is recursive by default."""
+		if self.startTag and predicate(self.startTag):
 			return [self]
 		else:
 			res = []
 			for c in self.children:
-				res.extend(c.find(withName))
+				if recursive:
+					res.extend(c.find(predicate))
+				elif predicate(c):
+					res.append(c)
 		return res
 
 	def open( self, startTag):
@@ -405,7 +439,17 @@ class TagTree:
 		else:
 			return self._taglist
 
-	def asText( self, ):
+	def hasClass( self, name ):
+		"""Tells if the element has the given class (case sensitive)"""
+		if self.startTag: return self.startTag.hasClass(name)
+		else: return None
+
+	def hasId( self, name ):
+		"""Tells if the element has the given id (case sensitive)"""
+		if self.startTag: return self.startTag.hasId(name)
+		else: return None
+
+	def prettyString( self, ):
 		if self.name == self.TEXT:
 			return "#text:" + repr(self.startTag.html())
 		else:
@@ -422,7 +466,7 @@ class TagTree:
 				res += "@%d]%s\n" % (self.depth(), attr)
 			for c in self.children:
 				ctext = ""
-				for line in c.asText().split("\n"):
+				for line in c.prettyString().split("\n"):
 					if not line: continue
 					if not ctext:
 						ctext  = "   <" + line + "\n"
@@ -432,7 +476,7 @@ class TagTree:
 			return res
 
 	def __str__( self ):
-		return self.asText()
+		return self.prettyString()
 	
 	def __repr__( self ):
 		return str(self.list())
@@ -440,7 +484,11 @@ class TagTree:
 	def html( self ):
 		"""Converts this tags tree to HTML"""
 		return self.list().html()
-	
+
+	def text( self ):
+		"""Returns only the text tags in this HTML tree"""
+		return self.list().text()
+
 	def innerhtml( self ):
 		return self.list().innerhtml()
 
@@ -498,6 +546,13 @@ class HTMLTools:
 
 	def __init__( self ):
 		pass
+	
+	# PREDICATES
+	# ========================================================================
+
+	def withClass( self, name ):
+		"""Predicate that filters node by class"""
+		return lambda n:n.hasClass(name)
 
 	# BASIC PARSING OPERATIONS
 	# ========================================================================

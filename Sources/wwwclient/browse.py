@@ -305,7 +305,6 @@ class Transaction:
 		# TODO: IMPLEMENT ME
 		assert None, "Not implemented"
 
-	
 	def newCookies( self ):
 		"""Returns the list of new cookies."""
 		return self._newCookies

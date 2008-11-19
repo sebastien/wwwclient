@@ -3,10 +3,15 @@
 -- Author: Sébastien Pierre
 -- Date:   26-Jul-2006
 
+Version 1.1::
+
+  [ ] Response object
+  [ ] Charset and encoding support 
+
 Version 1.0::
 
   [X] Complete documentation
-  [ ] Browser personality support
+  [X] Browser personality support
   [ ] FireFox profile
   [ ] Safari Profile
   [ ] IE profile

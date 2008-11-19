@@ -414,7 +414,7 @@ Tag list and tag tree
     >     ... 
     >     </tbody>
 
-    When you convert it to a list using the `wwwclient.scrape` `HTML.list()`
+    When you convert it to a list using the `wwwclient.scrape` `HTML.list(...)`
     function, you get this:
 
     >   ['<tbody>',
@@ -428,7 +428,7 @@ Tag list and tag tree
     >   '<td align="right">', '81.03%', '</td>', '\n  ', '</tr>', '\n        ',
     >   ....
 
-    when folded into a tree, or when you call `HTML.tree()`, you get something
+    when folded into a tree, or when you call `HTML.tree(...)`, you get something
     like that:
 
     >   #root
