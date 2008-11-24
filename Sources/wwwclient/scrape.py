@@ -29,7 +29,7 @@ well-formed, and allows easy selection of HTML fragments."""
 RE_SPACES    = re.compile("\s+")
 RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
-RE_HTMLLINK  = re.compile("<[^<]+(href|src)\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
+RE_HTMLLINK  = re.compile("<[^<]+(href|src)\s*=\s*('[^']*'|\"[^\"]*\"|[^ >]*)", re.I)
 
 RE_HTMLCLASS = re.compile("class\s*=\s*['\"]?([\w\-_\d]+)", re.I)
 RE_HTMLID    = re.compile("id\s*=\s*['\"]?([\w\-_\d]+)", re.I)
@@ -689,6 +689,8 @@ class HTMLTools:
 		res = []
 		for match in self.onRE(html, RE_HTMLLINK):
 			tag  = match.group()
+			tag  = tag.replace("\t"," ")
+			tag  = tag.replace("\n"," ")
 			tag  = tag[1:tag.find(" ")]
 			href = match.group(2)
 			if href[0] in ("'", '"'): href = href[1:-1]
