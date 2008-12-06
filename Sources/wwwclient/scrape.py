@@ -210,7 +210,7 @@ class TagList:
 				if tag.type == Tag.CLOSE:
 					opening_tag, level = find_opening_tag(tag, tags_stack)
 					if not opening_tag:
-						print "WARNING: no opening tag for ", tag
+						#print "WARNING: no opening tag for ", tag
 						continue
 					else:
 						while len(tags_stack) > level:
@@ -569,7 +569,7 @@ class HTMLTools:
 
 	def list( self, data ):
 		"""Converts the given text or tagtree into a taglist."""
-		if type(data) == str:
+		if type(data) in (str, unicode):
 			tag_list = TagList()
 			tag_list.fromHTML(data, scraper=self)
 			return tag_list
@@ -618,22 +618,22 @@ class HTMLTools:
 
 	def text( self, data, expand=False, norm=False ):
 		"""Strips the given tags from HTML text"""
-		res = []
-		for tag in self.list(data):
-			if not isinstance(tag, TextTag): continue
-			res.append(tag.html())
-		res = "".join(res)
+		res = None
+		if type(data) in (str, unicode):
+			res = data
+		else:
+			res = data.text()
 		if expand: res = self.expand(res)
 		if norm: res = self.norm(res)
 		return res
 
-	def expand( self, text ):
+	def expand( self, text, encoding=None ):
 		"""Expands the entities found in the given text."""
 		# NOTE: This is based on
 		# <http://www.shearersoftware.com/software/developers/htmlfilter/>
 		entityStart = text.find('&')
 		if entityStart != -1:          # only run bulk of code if there are entities present
-			preferUnicodeToISO8859 = 1 #(outputEncoding is not 'iso-8859-1')
+			preferUnicodeToISO8859 = True
 			prevOffset = 0
 			textParts = []
 			while entityStart != -1:
@@ -649,6 +649,8 @@ class HTMLTools:
 					if len(entity) == 1:
 						if preferUnicodeToISO8859 and ord(entity) > 127 and hasattr(entity, 'decode'):
 							entity = entity.decode('iso-8859-1')
+							if type(text) != unicode and encoding:
+								entity = entity.encode(encoding)
 					else:
 						if len(entity) >= 4 and entity[1] == '#':
 							if entity[2] in ('X','x'):
@@ -661,11 +663,13 @@ class HTMLTools:
 								entity = chr(entityCode)
 								if preferUnicodeToISO8859 and hasattr(entity, 'decode'):
 									entity = entity.decode('iso-8859-1')
+									if type(text) != unicode and encoding:
+										entity = entity.encode(encoding)
 					textParts.append(entity)
 				prevOffset = entityEnd+1
 				entityStart = text.find('&', prevOffset)
 			textParts.append(text[prevOffset:])
-			text = ''.join(textParts)
+			text = u''.join(textParts)
 		return text
 
 
