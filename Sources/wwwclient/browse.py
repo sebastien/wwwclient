@@ -9,14 +9,14 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 30-Jul-2006
+# Last mod  : 07-Apr-2009
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, time
+import urlparse, urllib, mimetypes, re, os, sys, time
 import client, defaultclient, scrape
 
 HTTP               = "http"
@@ -345,7 +345,7 @@ class Transaction:
 		if self._done: return
 		# We prepare the headers
 		request  = self.request()
-		headers  = request.headers() 
+		headers  = request.headers()
 		self._session._log(request.method(), request.url())
 		# We merge the session cookies into the request
 		request.cookies().merge(self.session().cookies())
@@ -446,7 +446,7 @@ class Session:
 		if self._onLog:
 			self._onLog(*args)
 		else:
-			print " ".join(map(str,args))
+			sys.stderr.write(" ".join(map(str,args)) + "\n")
 
 	def setLogger( self, callback ):
 		"""Sets the logger callback (only enabled when the session is set to
@@ -661,7 +661,6 @@ class Session:
 		the given file."""
 		if transaction is None: transaction = self.last()
 		d = transaction.data()
-		print type(d)
 		f = file(path,'w')
 		f.write(d)
 		f.close()

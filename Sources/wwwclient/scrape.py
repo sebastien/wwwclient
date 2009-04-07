@@ -116,6 +116,9 @@ class ElementTag(Tag):
 		else:
 			return what.match(self.name(), re.I)
 
+	def hasName( self, name ):
+		return self.name().lower() == name.lower()
+
 	def hasClass( self, name ):
 		"""Tells if the element has the given class (case sensitive)"""
 		element_class = self.attributes().get("class")
@@ -135,6 +138,9 @@ class TextTag(Tag):
 
 	def __init__( self, html, start, end):
 		Tag.__init__(self, html, start, end)
+
+	def hasName( self, name ):
+		return False
 
 	def hasClass( self, name ):
 		"""Tells if the element has the given class (case sensitive)"""
@@ -439,6 +445,11 @@ class TagTree:
 		else:
 			return self._taglist
 
+	def hasName( self, name ):
+		"""Tells if the element has the given class (case sensitive)"""
+		if self.startTag: return self.startTag.hasName(name)
+		else: return None
+
 	def hasClass( self, name ):
 		"""Tells if the element has the given class (case sensitive)"""
 		if self.startTag: return self.startTag.hasClass(name)
@@ -553,6 +564,10 @@ class HTMLTools:
 	def withClass( self, name ):
 		"""Predicate that filters node by class"""
 		return lambda n:n.hasClass(name)
+
+	def withName( self, name ):
+		"""Predicate that filters node by class"""
+		return lambda n:n.hasName(name)
 
 	# BASIC PARSING OPERATIONS
 	# ========================================================================
