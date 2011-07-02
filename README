@@ -530,6 +530,8 @@ Getting to the desired data
     will return us the data node with depth 4 and more in a new tag tree. We may
     now want to keep only the `<p>` and `<table>` elements.
 
+    # FIXME: Not sure how this should work
+
     filter::
 
         The `filter()` method allows to create a new tag tree which content

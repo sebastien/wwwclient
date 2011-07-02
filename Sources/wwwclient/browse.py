@@ -69,6 +69,14 @@ class Pairs:
 				return value
 		return None
 
+	def has( self, name ):
+		"""Tells if the pair has a field with the given name
+		(case-insensitive)"""
+		for key, value in self.pairs:
+			if name.lower().strip() == key.lower().strip():
+				return True
+		return False
+
 	def add( self, name, value=None ):
 		"""Adds the given value to the given name. This does not destroy what
 		already existed. (if the pair already exists, it is not added twice."""
@@ -274,6 +282,10 @@ class Transaction:
 	
 	"""
 
+	STATUS  = 0
+	HEADERS = 1
+	BODY    = 2
+
 	def __init__( self, session, request ):
 		self._client     = session._httpClient
 		self._session    = session
@@ -282,6 +294,7 @@ class Transaction:
 		self._cookies    = Pairs()
 		self._newCookies = None
 		self._done       = False
+		self._responses  = []
 
 	def session( self ):
 		"""Returns this transaction session"""
@@ -302,8 +315,9 @@ class Transaction:
 	
 	def headers( self ):
 		"""Returns the headers received by the response."""
-		# TODO: IMPLEMENT ME
-		assert None, "Not implemented"
+		headers = self._responses[-1][self.HEADERS]
+		headers = self._client._parseHeaders(headers)
+		return Pairs(headers)
 
 	def newCookies( self ):
 		"""Returns the list of new cookies."""
@@ -325,10 +339,18 @@ class Transaction:
 		assert self._done
 		return scrape.HTML.links(self.data())
 
+	def body( self ):
+		"""Returns the response data (implies that the transaction was
+		previously done)"""
+		if self._responses:
+			return self._responses[-1][self.BODY]
+		else:
+			return None
+
 	def data( self ):
 		"""Returns the response data (implies that the transaction was
 		previously done)"""
-		return self._client.data()
+		return self.body()
 
 	def redirect( self ):
 		"""Returns the URL to which the response redirected, if any."""
@@ -346,6 +368,7 @@ class Transaction:
 		# We prepare the headers
 		request  = self.request()
 		headers  = request.headers()
+		response = None
 		self._session._log(request.method(), request.url())
 		# We merge the session cookies into the request
 		request.cookies().merge(self.session().cookies())
@@ -353,13 +376,13 @@ class Transaction:
 		request.cookies().merge(self.cookies())
 		# We send the request as a GET
 		if request.method() == GET:
-			self._client.GET(
+			responses = self._client.GET(
 				request.url(),
 				headers=request.headers().asHeaders()
 			)
 		# Or as a POST
 		elif request.method() == POST:
-			self._client.POST(
+			responses = self._client.POST(
 				request.url(),
 				data=request.data(),
 				attach=request.attachments(),
@@ -370,9 +393,10 @@ class Transaction:
 		else:
 			raise Exception("Unsupported method:", request.method())
 		# We merge the new cookies if necessary
-		self._status = self._client.status()
+		self._status     = self._client.status()
 		self._newCookies = Pairs(self._client.newCookies())
-		self._done = True
+		self._done       = True
+		self._responses += responses
 		return self
 
 	def done( self ):
@@ -576,9 +600,14 @@ class Session:
 		if do:
 			transaction.do()
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
-			# And follow the redirect if any
+			visited = [url]
 			while transaction.redirect() and follow:
-				transaction = self.get(transaction.redirect(), do=True)
+				redirect_url = self.__processURL(transaction.redirect(), store=False)
+				if not (redirect_url in visited):
+					visited.append(redirect_url)
+					transaction = self.get(redirect_url, headers=headers, cookies=cookies, do=True)
+				else:
+					break
 		return transaction
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
@@ -608,8 +637,14 @@ class Session:
 			transaction.do()
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			# And follow the redirect if any
+			visited = [url]
 			while transaction.redirect() and follow:
-				transaction = self.get(transaction.redirect(), do=True)
+				redirect_url = self.__processURL(transaction.redirect(), store=False)
+				if not (redirect_url in visited):
+					visited.append(redirect_url)
+					transaction = self.post(redirect_url, data=data, mimetype=mimetype, fields=fields, attach=attach, headers=headers, cookies=cookies, do=True)
+				else:
+					break
 		return transaction
 
 	def submit( self, form, values={}, attach=[], action=None,  method=POST,
@@ -665,7 +700,7 @@ class Session:
 		f.write(d)
 		f.close()
 
-	def __processURL( self, url ):
+	def __processURL( self, url, store=True ):
 		"""Processes the given URL, by storing the host and protocol, and
 		returning a normalized, absolute URL"""
 		old_url = url
@@ -678,12 +713,24 @@ class Session:
 			if not url.startswith("http"): url = "http://" + url
 		# And now we parse the url and update the session attributes
 		protocol, host, path, parameters, query, fragment =  urlparse.urlparse(url)
-		if   protocol == "http": self._protocol  = HTTP
-		elif protocol == "https": self._protocol = HTTPS
-		if host: self._host =  host
+		if store:
+			if   protocol == "http": self._protocol  = protocol = HTTP
+			elif protocol == "https": self._protocol = protocol = HTTPS
+		if host:
+			host = host.split(":")
+			port = 80
+			if len(host) == 1:
+				host = host[0]
+			else:
+				port = host[1]
+				host = host[0]
+			if store:
+				self._host = host
+				self._port = port = port or 80
 		# We recompose the url
+		# FIXME: WTF is "ppg.h" ??
 		assert not path.startswith("ppg.h")
-		url = "%s://%s" % (self._protocol, self._host)
+		url = "%s://%s:%s" % (protocol, host, port)
 		if   path and path[0] == "/": url += path
 		elif path:      url += "/" + path
 		else:           url += "/"

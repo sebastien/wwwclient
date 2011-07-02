@@ -94,7 +94,7 @@ class HTTPClient(client.HTTPClient):
 		self._status = response.status
 		self._url    = self._url #FIXME: Handle location
 		self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
-		self._parseResponse(res)
+		res = self._parseResponse(res)
 		if self._http: self._http.close()
 		self._http = None
 		if self.verbose >= 1:

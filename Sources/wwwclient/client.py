@@ -36,7 +36,7 @@ CONTENT_ATTACHMENT = 1
 
 RE_CONTENT_LENGTH  = re.compile("\s*Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
 RE_CONTENT_ENCODING= re.compile("\s*Content-Encoding\s*:(.*)\r\n", re.I|re.MULTILINE)
-RE_CONTENT_TYPE    = re.compile("\s*Content-Type\s*:\s*([0-9]+)",   re.I|re.MULTILINE)
+RE_CONTENT_TYPE    = re.compile("\s*Content-Type\s*:(.*)\r\n",   re.I|re.MULTILINE)
 RE_CHARSET         = re.compile("\s*charset=([\w\d_-]+)",           re.I|re.MULTILINE)
 RE_LOCATION        = re.compile("\s*Location\s*:(.*)\r\n",          re.I|re.MULTILINE)
 RE_SET_COOKIE      = re.compile("\s*Set-Cookie\s*:(.*)\r\n",        re.I|re.MULTILINE)
@@ -260,7 +260,11 @@ class HTTPClient:
 			is_chunked       = RE_CHUNKED.search(headers)
 			content_length   = RE_CONTENT_LENGTH.search(headers)
 			content_encoding = RE_CONTENT_ENCODING.search(headers)
-			if content_encoding: content_encoding = content_encoding.group(1)
+			content_type     = RE_CONTENT_TYPE.search(headers)
+			if content_encoding:
+				content_encoding = content_encoding.group(1)
+			if content_type:
+				content_type     = content_type.group(1)
 			if charset:
 				encoding   = charset.group(1)
 			else:
@@ -304,13 +308,15 @@ class HTTPClient:
 		if contentEncoding:
 			if contentEncoding.lower().strip() == "gzip":
 				body = zlib.decompress(body)
-				if encoding: return body.decode(encoding)
-				else: return body
+				#if encoding: return body.decode(encoding)
+				#else: return body
+				return body
 			else:
 				raise Exception("Unsupported content encoding: " + contentEncoding)
 		else:
-			if encoding: return body.decode(encoding)
-			else: return body
+			# FIXME: Should not force encoding, only if it's a string
+			#if encoding: return body.decode(encoding)
+			return body
 
 	def _parseStatefulHeaders( self, headers ):
 		"""Return the Location and Set-Cookie headers from the given header
