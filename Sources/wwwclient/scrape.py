@@ -8,7 +8,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 12-Nov-2008
+# Last mod  : 08-Jul-2008
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -74,8 +74,8 @@ class Tag:
 		return repr(self._html[self.start:self.end])
 
 class ElementTag(Tag):
-	"""An element tag is a tag implementation that represents an HTML element,
-	which can have attributes and contain child elements."""
+	"""Represents a single element tag (open or close) identified within
+	a string."""
 
 	def __init__( self, html, start, end, astart=None, aend=None, attributes=None,
 	level=None, type=None ):
@@ -142,6 +142,7 @@ class ElementTag(Tag):
 		return u''
 
 class TextTag(Tag):
+	"""Represents raw text, not an element."""
 
 	def __init__( self, html, start, end):
 		Tag.__init__(self, html, start, end)
@@ -160,7 +161,13 @@ class TextTag(Tag):
 	def text(self, encoding=DEFAULT_ENCODING):
 		return self._html[self.start:self.end].decode(encoding)
 
+	def name(self):
+		return "#text"
+
 class TagList:
+	"""Represents a list of ElementTag and TextTag, which basically corresponds
+	to the tokenization of an HTML string. The list can be folded as a tree
+	if necessary."""
 
 	def __init__( self, content=None ):
 		"""Creates a blank TagTree. It should be populated with data using the
@@ -218,7 +225,6 @@ class TagList:
 		for tag in self.content:
 			#  We create the node
 			if isinstance(tag, TextTag):
-				print "Adding text tag:", tag, "to", parents
 				parents[-1].append(TagTree(tag))
 			else:
 				if tag.type in (Tag.OPEN, Tag.EMPTY):
@@ -242,7 +248,7 @@ class TagList:
 				elif tag.type == Tag.CLOSE:
 					opening_tag, level = find_opening_tag(tag, tags_stack)
 					if not opening_tag:
-						print "WARNING: no opening tag for ", tag
+						#print "WARNING: no opening tag for ", tag
 						continue
 					else:
 						while len(tags_stack) > level:
@@ -286,7 +292,7 @@ class TagList:
 
 # FIXME: Should inherit from TagNode
 class TagTree:
-	"""A tree node wraps one or two tags and allows to structure tags as a tree.
+	"""A tag tree wraps one or two tags and allows to structure tags as a tree.
 	The tree node instance offers a nice interface to manipulate the HTML
 	document as a tree."""
 
@@ -410,13 +416,14 @@ class TagTree:
 		if self.startTag and predicate(self.startTag):
 			return [self]
 		else:
-			res = []
+			res  = []
 			for c in self.children:
-				if recursive:
-					res.extend(c.find(predicate))
-				elif predicate(c):
+				assert isinstance(c, TagTree)
+				if predicate(c):
 					res.append(c)
-		return res
+				if recursive:
+					res = res + c.find(predicate)
+			return res
 
 	def open( self, startTag):
 		if startTag==None: return
@@ -444,6 +451,12 @@ class TagTree:
 		assert node != self
 		self.children.append(node)
 		self._taglist = None
+		return self
+
+	def merge( self, node ):
+		assert isinstance(node, TagTree)
+		for child in node.children:
+			self.append(child)
 		return self
 
 	def list( self, contentOnly=False ):

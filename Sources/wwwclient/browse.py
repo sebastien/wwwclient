@@ -716,9 +716,9 @@ class Session:
 		if store:
 			if   protocol == "http": self._protocol  = protocol = HTTP
 			elif protocol == "https": self._protocol = protocol = HTTPS
+		port = None
 		if host:
 			host = host.split(":")
-			port = 80
 			if len(host) == 1:
 				host = host[0]
 			else:
@@ -726,11 +726,14 @@ class Session:
 				host = host[0]
 			if store:
 				self._host = host
-				self._port = port = port or 80
+				self._port = port
 		# We recompose the url
 		# FIXME: WTF is "ppg.h" ??
 		assert not path.startswith("ppg.h")
-		url = "%s://%s:%s" % (protocol, host, port)
+		if port:
+			url = "%s://%s:%s" % (protocol, host, port)
+		else:
+			url = "%s://%s" % (protocol, host)
 		if   path and path[0] == "/": url += path
 		elif path:      url += "/" + path
 		else:           url += "/"
