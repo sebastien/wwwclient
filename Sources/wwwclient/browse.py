@@ -9,14 +9,14 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 07-Apr-2009
+# Last mod  : 16-Jan-2012
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time
+import urlparse, urllib, mimetypes, re, os, sys, time, json
 import client, defaultclient, scrape
 
 HTTP               = "http"
@@ -351,6 +351,9 @@ class Transaction:
 		"""Returns the response data (implies that the transaction was
 		previously done)"""
 		return self.body()
+	
+	def dataAsJSON( self ):
+		return json.loads(self.data())
 
 	def redirect( self ):
 		"""Returns the URL to which the response redirected, if any."""
@@ -440,6 +443,7 @@ class Session:
 		protocol."""
 		self._httpClient      = defaultclient.HTTPClient()
 		self._host            = None
+		self._port            = 80
 		self._protocol        = None
 		self._transactions    = []
 		self._cookies         = Pairs()
@@ -706,15 +710,23 @@ class Session:
 		old_url = url
 		if url == None and not self._transactions: url = "/"
 		if url == None and self._transactions: url = self.last().request.url()
-		# If we have no default host, then we ensure that there is an http
-		# prefix (for instance, www.google.com could be mistakenly interpreted
-		# as a path)
-		if self._host == None:
-			if not url.startswith("http"): url = "http://" + url
-		# And now we parse the url and update the session attributes
-		protocol, host, path, parameters, query, fragment =  urlparse.urlparse(url)
+		proto_rest = url.split("://",1)
+		if len(proto_rest) == 2 and proto_rest[0].find("/") == -1:
+			# If the URL was given with a protocol, then we might change server
+			protocol, host, path, parameters, query, fragment =  urlparse.urlparse(url)
+		else:
+			# Otherwise we expect to be on the same server (and then just the
+			# path is given)
+			assert self._host, "No host was given to url"
+			protocol, host, path, parameters, query, fragment =  urlparse.urlparse(
+				"%s://%s:%s%s" % (
+					(self._protocol or HTTP),
+					self._host,
+					self._port or 80,
+					url[0] == "/" and url or ("/" + url)
+			))
 		if store:
-			if   protocol == "http": self._protocol  = protocol = HTTP
+			if   protocol == "http":  self._protocol = protocol = HTTP
 			elif protocol == "https": self._protocol = protocol = HTTPS
 		port = None
 		if host:
@@ -728,8 +740,6 @@ class Session:
 				self._host = host
 				self._port = port
 		# We recompose the url
-		# FIXME: WTF is "ppg.h" ??
-		assert not path.startswith("ppg.h")
 		if port:
 			url = "%s://%s:%s" % (protocol, host, port)
 		else:

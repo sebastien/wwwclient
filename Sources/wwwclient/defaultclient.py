@@ -66,7 +66,7 @@ class HTTPClient(client.HTTPClient):
 			raise Exception("No host defined for request: %s" % (url))
 		i = url.find(host)
 		if i == -1:
-			raise Exception("Url does not correspond to current host (%s): %s " % (host, url))
+			raise Exception("URL does not correspond to current host (%s): %s " % (host, url))
 		url_path = url[i+len(host):]
 		self._http = httplib.HTTPConnection(host)
 		http_headers = {}
