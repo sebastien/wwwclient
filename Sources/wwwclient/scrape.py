@@ -8,7 +8,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 08-Jul-2008
+# Last mod  : 19-Mar-2012
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -136,7 +136,7 @@ class ElementTag(Tag):
 
 	def hasId( self, name ):
 		"""Tells if the element has the given id (case sensitive)"""
-		return self.attributes.get("id") == name
+		return self.attributes().get("id") == name
 
 	def text(self, encoding=DEFAULT_ENCODING):
 		return u''
@@ -410,20 +410,27 @@ class TagTree:
 					root.append(child.clone())
 		return root
 
-	def find( self, predicate, recursive=True ):
-		"""Returns a list of child nodes that match the given predicate. This
-		operation is recursive by default."""
+	def match( self, predicate ):
+		"""Tells if the current TagTree matches the given predicate"""
 		if self.startTag and predicate(self.startTag):
-			return [self]
+			return True
 		else:
-			res  = []
-			for c in self.children:
-				assert isinstance(c, TagTree)
-				if predicate(c):
-					res.append(c)
-				if recursive:
-					res = res + c.find(predicate)
-			return res
+			return False
+
+	def find( self, predicate, recursive=True ):
+		"""Returns a list of child nodes (TagTree objects) that match the given predicate. This
+		operation is recursive by default."""
+		# NOTE: This has been removed, as find means "find inside"
+		# if self.startTag and predicate(self.startTag):
+		# 	return [self]
+		res  = []
+		for c in self.children:
+			assert isinstance(c, TagTree)
+			if predicate(c):
+				res.append(c)
+			if recursive:
+				res = res + c.find(predicate)
+		return res
 
 	def open( self, startTag):
 		if startTag==None: return
@@ -512,6 +519,30 @@ class TagTree:
 						ctext += "    " + line + "\n"
 				res += ctext
 			return res
+
+	def query( self, query ):
+		"""Does a basic CSS-like query on the TagTree. Returns a TagTree"""
+		if type(query) not in (tuple, list):
+			selectors = filter(lambda _:_.strip(), query.split(" "))
+		else:
+			selectors = filter(lambda _:_.strip(), query)
+		if selectors:
+			head      = selectors[0]
+			tail      = []
+			if len(selectors) >= 1: tail = selectors[1:]
+			predicate = lambda: True
+			if head[0] == ".":
+				predicate = lambda _:predicate and _.hasClass(head[1:])
+			elif head[0] == "#":
+				predicate = lambda _:predicate and _.hasId(head[1:])
+			else:
+				predicate = lambda _:predicate and _.hasName(head)
+			res = []
+			for sub_tree in self.find(predicate):
+				res = res + sub_tree.query(tail)
+			return res
+		else:
+			return [self]
 
 	def __str__( self ):
 		return self.prettyString()

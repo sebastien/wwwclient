@@ -9,7 +9,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 16-Jan-2012
+# Last mod  : 19-Mar-2012
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
@@ -17,7 +17,7 @@
 # TODO: Add   session.select() to select a form before submit
 
 import urlparse, urllib, mimetypes, re, os, sys, time, json
-import client, defaultclient, scrape
+from   wwwclient import client, defaultclient, scrape, agents
 
 HTTP               = "http"
 HTTPS              = "https"
@@ -30,6 +30,27 @@ METHODS            = (GET, POST, HEAD)
 
 FILE_ATTACHMENT    = client.FILE_ATTACHMENT
 CONTENT_ATTACHMENT = client.CONTENT_ATTACHMENT
+
+def quote(path):
+	return urllib.quote(path, '/%')
+
+def fix(s, charset='utf-8'):
+	"""Sometimes you get an URL by a user that just isn't a real
+	URL because it contains unsafe characters like ' ' and so on.  This
+	function can fix some of the problems in a similar way browsers
+	handle data entered by the user:
+
+	>>> url_fix(u'http://de.wikipedia.org/wiki/Elf (Begriffsklärung)')
+	'http://de.wikipedia.org/wiki/Elf%20%28Begriffskl%C3%A4rung%29'
+
+	:param charset: The target charset for the URL if the url was
+					given as unicode string.
+	"""
+	if isinstance(s, unicode): s = s.encode(charset, 'ignore')
+	scheme, netloc, path, qs, anchor = urlparse.urlsplit(s)
+	path = urllib.quote(path, '/%')
+	qs = urllib.quote_plus(qs, ':&=')
+	return urlparse.urlunsplit((scheme, netloc, path, qs, anchor))
 
 # -----------------------------------------------------------------------------
 #
@@ -372,7 +393,8 @@ class Transaction:
 		request  = self.request()
 		headers  = request.headers()
 		response = None
-		self._session._log(request.method(), request.url())
+		# if self._verbose >= 1:
+		# 	self._session._log(request.method(), request.url())
 		# We merge the session cookies into the request
 		request.cookies().merge(self.session().cookies())
 		# As well as this transaction cookies
@@ -406,6 +428,13 @@ class Transaction:
 		"""Tells if the transaction is done/complete."""
 		return self._done
 
+	# SCRAPING ________________________________________________________________
+	def asTree( self ):
+		return scrape.HTML.tree(self.data())
+
+	def query( self, selector ):
+		return self.asTree().query(selector)
+
 	def __str__( self ):
 		return self.data()
 
@@ -438,7 +467,7 @@ class Session:
 	DEFAULT_RETRIES  = 5
 	DEFAULT_DELAY    = 1
 
-	def __init__( self, url=None, verbose=True, personality=None, follow=True, do=True ):
+	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True ):
 		"""Creates a new session at the given host, and for the given
 		protocol."""
 		self._httpClient      = defaultclient.HTTPClient()
@@ -454,6 +483,7 @@ class Session:
 		self._onLog           = None
 		self._follow          = follow
 		self._do              = do
+		if type(personality) in (unicode,str): personality = Personality.Get(personality)
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
 		self.verbose(verbose)
@@ -780,33 +810,30 @@ class Personality:
 	Personalities allow to ensure that specific headers are set in all requests,
 	so that the requests really look like they come from a specific browser."""
 
-	def __init__( self ):
-		pass
+	@classmethod
+	def Get( self, agent ):
+		if agent == "random":
+			return self.Get(agents.pickAgent())
+		elif agent == "Firefox":
+			return Firefox(agent)
+		else:
+			return self(agent)
+
+	def __init__( self, agent ):
+		self.agent = agents.pickLatest(agent)
 	
+	def userAgent( self ):
+		return self.agent[-1]
+
 	def apply( self, request ):
 		pass
 
-class FireFox(Personality):
-	"""Simulates the way FireFox would behave."""
+class Firefox(Personality):
+	"""Simulates the way Firefox would behave."""
 
-	def __init__( self ):
-		Personality.__init__(self)
-		self.desktop        = "X11"
-		self.platform       = "Linux i686"
-		self.languages      = "en-US"
-		self.revision       = "1.9"
-		self.geckoVersion   = "2008061015"
-		self.firefoxVersion = "3.0"
-
-	def userAgent( self ):
-		return "Mozilla/5.0 (%s; U; %s; %s; rv:%s) Gecko/%s Firefox/%s" % (
-			self.desktop,
-			self.platform,
-			self.languages,
-			self.revision,
-			self.geckoVersion,
-			self.firefoxVersion,
-		)
+	def __init__( self, agent ):
+		Personality.__init__(self, "Firefox")
+		self.agent = agent
 
 	def apply( self, request ):
 		request.header( "User-Agent", self.userAgent())
