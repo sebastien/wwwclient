@@ -1,9 +1,8 @@
-== WWWClient 0.9.1
+== WWWClient 1.0.0
 == Advanced web browsing, scraping and automation
 -- Author: Sebastien Pierre
--- Date:   21-Sep-2006
--- Update: 26-Jul-2008
-
+-- Created:   21-Sep-2006
+-- Updated:   19-Mar-2012
 
 Python has some well-known web automation and processing tools such as
 [Mechanize](http://wwwsearch.sourceforge.net/mechanize/), [Twill](http://twill.idyll.org/) and
@@ -47,6 +46,18 @@ WWWClient is separated in four main modules:
 The forthcoming sections will present the *browsing* and *scraping* modules in
 detail. For information on the rest of WWWClient, the best source is the API
 documentation (included as [wwwclient-api.html] in the distribution)
+
+Quickstart
+==========
+
+You should start by importing the `Session` object, which allows you to 
+create browsing/scraping sessions.
+
+>    from wwwclient import Session
+
+Then start to do your queries:
+
+>    print map(lambda _:_.text(), Session(verbose=1),get("http://ffctn.com/services").query("h4"))
 
 Browsing
 ========
