@@ -36,6 +36,7 @@ RE_HTMLID    = re.compile("id\s*=\s*['\"]?([\w\-_\d]+)", re.I)
 RE_HTMLHREF  = re.compile("href\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
 
 RE_SPACES    = re.compile("\s+", re.MULTILINE)
+RE_QUERY     = re.compile("^(?P<name>\w+)?(?P<id>#[\w\d]+)?(?P<class>\.[\w\d]+)?(?P<property>\:[\w\d\-]+)?(?P<count>\[\-?\d+\])?$")
 
 KEEP_ABOVE    = "+"
 KEEP_SAME     = "="
@@ -531,16 +532,30 @@ class TagTree:
 			tail      = []
 			if len(selectors) >= 1: tail = selectors[1:]
 			predicate = lambda: True
-			if head[0] == ".":
-				predicate = lambda _:predicate and _.hasClass(head[1:])
-			elif head[0] == "#":
-				predicate = lambda _:predicate and _.hasId(head[1:])
-			else:
-				predicate = lambda _:predicate and _.hasName(head)
+			match     = RE_QUERY.match(head)
+			assert match, "Invalid selector expression: " + repr(head)
+			p_name, p_id, p_class, p_property, p_count = match.group("name"), match.group("id"), match.group("class"), match.group("property"), match.group("count")
+			if p_name:
+				predicate = lambda _:predicate and _.hasName(p_name)
+			if p_id:
+				predicate = lambda _:predicate and _.hasId(p_id[1:])
+			if p_class:
+				predicate = lambda _:predicate and _.hasClass(p_class[1:])
+			if p_property:
+				raise Exception("Property selector not supproted yet: " + p_property)
 			res = []
 			for sub_tree in self.find(predicate):
 				res = res + sub_tree.query(tail)
-			return res
+			if p_count:
+				count = int(p_count[1:-1])
+				if count < 0:
+					count = len(res) + count
+				if count < len(res):
+					return [res[count]]
+				else:
+					return [None]
+			else:
+				return res
 		else:
 			return [self]
 
