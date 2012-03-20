@@ -433,7 +433,14 @@ class Transaction:
 		return scrape.HTML.tree(self.data())
 
 	def query( self, selector ):
+		"""Converts the current transaction to an HTML/XML tree and applies
+		the given CSS selector query."""
 		return self.asTree().query(selector)
+
+	def save( self, path ):
+		"""Saves the current transaction data to the current file"""
+		with file(path,"wb") as f:
+			f.write(self.data())
 
 	def __str__( self ):
 		return self.data()

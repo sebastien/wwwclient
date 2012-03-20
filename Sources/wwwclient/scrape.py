@@ -36,7 +36,7 @@ RE_HTMLID    = re.compile("id\s*=\s*['\"]?([\w\-_\d]+)", re.I)
 RE_HTMLHREF  = re.compile("href\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
 
 RE_SPACES    = re.compile("\s+", re.MULTILINE)
-RE_QUERY     = re.compile("^(?P<name>\w+)?(?P<id>#[\w\d]+)?(?P<class>\.[\w\d]+)?(?P<property>\:[\w\d\-]+)?(?P<count>\[\-?\d+\])?$")
+RE_QUERY     = re.compile("^(?P<name>[\w\d_\-]+)?(?P<id>#[\w\d_\-]+)?(?P<class>\.[\w\d_\-]+)?(?P<property>\:[\w\d\-]+)?(?P<count>\[\-?\d+\])?$")
 
 KEEP_ABOVE    = "+"
 KEEP_SAME     = "="
