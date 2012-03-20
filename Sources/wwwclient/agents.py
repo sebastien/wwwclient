@@ -4684,7 +4684,10 @@ def listVersions(agent, data=DATA):
 def pickLatest(agent=None,data=DATA):
 	if not agent: agent = pickAgent()
 	versions = listVersions(agent)
-	version  = versions[-1]
-	return (agent, version, random.choice(data[agent][version]))
+	if versions and len(versions) > 0:
+		version  = versions[-1]
+		return (agent, version, random.choice(data[agent][version]))
+	else:
+		return ("unknown", "unknown", agent)
 
 # EOF

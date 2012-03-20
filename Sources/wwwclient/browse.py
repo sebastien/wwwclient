@@ -821,8 +821,8 @@ class Personality:
 	def Get( self, agent ):
 		if agent == "random":
 			return self.Get(agents.pickAgent())
-		elif agent == "Firefox":
-			return Firefox(agent)
+		elif agent.lower() == "firefox":
+			return Firefox()
 		else:
 			return self(agent)
 
@@ -838,9 +838,9 @@ class Personality:
 class Firefox(Personality):
 	"""Simulates the way Firefox would behave."""
 
-	def __init__( self, agent ):
-		Personality.__init__(self, "Firefox")
-		self.agent = agent
+	def __init__( self ):
+		Personality.__init__(self, "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:11.0) Gecko/20100101 Firefox/11.0")
+		print self.agent
 
 	def apply( self, request ):
 		request.header( "User-Agent", self.userAgent())
