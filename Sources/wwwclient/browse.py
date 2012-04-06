@@ -16,7 +16,7 @@
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time, json
+import urlparse, urllib, mimetypes, re, os, sys, time, json, random
 from   wwwclient import client, defaultclient, scrape, agents
 
 HTTP               = "http"
@@ -474,9 +474,11 @@ class Session:
 	DEFAULT_RETRIES  = 5
 	DEFAULT_DELAY    = 1
 
-	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True ):
+	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None ):
 		"""Creates a new session at the given host, and for the given
-		protocol."""
+		protocol.
+		Keyword arguments::
+			'delay':  the range of delay between two requests e.g: (1.5, 3)"""
 		self._httpClient      = defaultclient.HTTPClient()
 		self._host            = None
 		self._port            = 80
@@ -490,6 +492,7 @@ class Session:
 		self._onLog           = None
 		self._follow          = follow
 		self._do              = do
+		self._delay           = delay
 		if type(personality) in (unicode,str): personality = Personality.Get(personality)
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
@@ -639,6 +642,8 @@ class Session:
 		self.__addTransaction(transaction)
 		# We do the transaction
 		if do:
+			# set a delay to do the transaction if _delay is specified
+			if self._delay: time.sleep(random.uniform(*self._delay))
 			transaction.do()
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			visited = [url]
@@ -675,6 +680,8 @@ class Session:
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		if do:
+			# set a delay to do the transaction if _delay is specified
+			if self._delay: time.sleep(random.uniform(*self._delay))
 			transaction.do()
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			# And follow the redirect if any
