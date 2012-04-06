@@ -16,8 +16,9 @@
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time, json, random
+import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib
 from   wwwclient import client, defaultclient, scrape, agents
+from retro.contrib.cache import TimeoutCache, MemoryCache
 
 HTTP               = "http"
 HTTPS              = "https"
@@ -465,6 +466,7 @@ class Session:
 	- 'transactions':    List of transactions
 	- 'maxTransactions': Maximum number of transactions in registered in
 	                     this session
+	- 'cache':           Cache contained last requests
 	- 'cookies':         List of cookies for this session
 	- 'userAgent':       String for this user session agent
 
@@ -473,6 +475,8 @@ class Session:
 	MAX_TRANSACTIONS = 10
 	DEFAULT_RETRIES  = 5
 	DEFAULT_DELAY    = 1
+	CACHE_TIMEOUT    = 1000
+	CACHE_LIMIT      = 100
 
 	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None ):
 		"""Creates a new session at the given host, and for the given
@@ -493,6 +497,7 @@ class Session:
 		self._follow          = follow
 		self._do              = do
 		self._delay           = delay
+		self._cache           = TimeoutCache(MemoryCache(limit=self.CACHE_LIMIT), timeout=self.CACHE_TIMEOUT)
 		if type(personality) in (unicode,str): personality = Personality.Get(personality)
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
@@ -640,8 +645,15 @@ class Session:
 		request     = self._createRequest( url=url, params=params, headers=headers, cookies=cookies )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
-		# We do the transaction
-		if do:
+		# search in the cache this request
+		params_str  = params.asURL() if params and isinstance(params, Pairs) else None
+		key         = 'GET+%s+%s' % (url, params_str)
+		key         = hashlib.sha1(key).hexdigest()
+		cache       = self._cache.get(key)
+		if cache:
+			transaction = cache
+		elif do:
+			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
 			if self._delay: time.sleep(random.uniform(*self._delay))
 			transaction.do()
@@ -654,6 +666,8 @@ class Session:
 					transaction = self.get(redirect_url, headers=headers, cookies=cookies, do=True)
 				else:
 					break
+			# we save the transaction in the cache
+			self._cache.set(key, transaction)
 		return transaction
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
@@ -679,7 +693,15 @@ class Session:
 		)
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
-		if do:
+		# search in the cache this request
+		params_str  = params.asURL() if params and isinstance(params, Pairs) else None
+		key         = 'POST+%s+%s' % (url, params_str)
+		key         = hashlib.sha1(key).hexdigest()
+		cache       = self._cache.get(key)
+		if cache:
+			transaction = cache
+		elif do:
+			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
 			if self._delay: time.sleep(random.uniform(*self._delay))
 			transaction.do()
@@ -693,6 +715,8 @@ class Session:
 					transaction = self.post(redirect_url, data=data, mimetype=mimetype, fields=fields, attach=attach, headers=headers, cookies=cookies, do=True)
 				else:
 					break
+			# we save the transaction in the cache
+			self._cache.set(key, transaction)
 		return transaction
 
 	def submit( self, form, values={}, attach=[], action=None,  method=POST,
@@ -847,7 +871,6 @@ class Firefox(Personality):
 
 	def __init__( self ):
 		Personality.__init__(self, "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:11.0) Gecko/20100101 Firefox/11.0")
-		print self.agent
 
 	def apply( self, request ):
 		request.header( "User-Agent", self.userAgent())
