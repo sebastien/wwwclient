@@ -473,7 +473,7 @@ class Session:
 	"""
 
 	MAX_TRANSACTIONS = 10
-	DEFAULT_RETRIES  = 5
+	DEFAULT_RETRIES  = [0.25, 0.5, 1.0, 1.5, 2.0]
 	DEFAULT_DELAY    = 1
 
 	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None, cache=None ):
@@ -627,7 +627,7 @@ class Session:
 		else:
 			self._referer = value
 
-	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=None):
+	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[]):
 		"""Gets the page at the given URL, with the optional params (as a `Pair`
 		instance), with the given headers.
 
@@ -644,7 +644,7 @@ class Session:
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		# search in the cache this request
-		if _cache:
+		if self._cache:
 			params_str  = params.asURL() if params and isinstance(params, Pairs) else None
 			key         = 'GET+%s+%s' % (url, params_str)
 			key         = hashlib.sha1(key).hexdigest()
@@ -657,15 +657,15 @@ class Session:
 			if self._delay: time.sleep(random.uniform(*self._delay))
 			# ensure that transaction.do retries after a fail
 			retry = retry or self.DEFAULT_RETRIES
-			for i in range(retry):
+			for i,r in enumerate(retry):
 				try:
 					transaction.do()
 					break
 				except httplib.IncompleteRead, e:
-					if i >= retry:
+					if i >= len(retry):
 						raise e
 					else:
-						time.sleep(i)
+						time.sleep(r)
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			visited = [url]
 			while transaction.redirect() and follow:
@@ -676,12 +676,12 @@ class Session:
 				else:
 					break
 			# we save the transaction in the cache
-			if _cache:
+			if self._cache:
 				self._cache.set(key, transaction)
 		return transaction
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
-	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None ):
+	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None, retry=[]):
 		"""Posts data to the given URL. The optional `params` (`Pairs`) or `data`
 		contain the posted data. The `mimetype` describes the mimetype of the data
 		(if it is a special kind of data). The `fields` is a `Pairs` instance of
@@ -704,7 +704,7 @@ class Session:
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		# search in the cache this request
-		if _cache:
+		if self._cache:
 			params_str  = params.asURL() if params and isinstance(params, Pairs) else None
 			key         = 'POST+%s+%s' % (url, params_str)
 			key         = hashlib.sha1(key).hexdigest()
@@ -715,7 +715,17 @@ class Session:
 			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
 			if self._delay: time.sleep(random.uniform(*self._delay))
-			transaction.do()
+			# ensure that transaction.do retries after a fail
+			retry = retry or self.DEFAULT_RETRIES
+			for i,r in enumerate(retry):
+				try:
+					transaction.do()
+					break
+				except httplib.IncompleteRead, e:
+					if i >= len(retry):
+						raise e
+					else:
+						time.sleep(r)
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			# And follow the redirect if any
 			visited = [url]
@@ -727,7 +737,7 @@ class Session:
 				else:
 					break
 			# we save the transaction in the cache
-			if _cache:
+			if self._cache:
 				self._cache.set(key, transaction)
 		return transaction
 
