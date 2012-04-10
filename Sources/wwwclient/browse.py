@@ -16,7 +16,7 @@
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib
+import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib
 from   wwwclient import client, defaultclient, scrape, agents
 from retro.contrib.cache import TimeoutCache, MemoryCache
 
@@ -629,7 +629,7 @@ class Session:
 		else:
 			self._referer = value
 
-	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None ):
+	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=None):
 		"""Gets the page at the given URL, with the optional params (as a `Pair`
 		instance), with the given headers.
 
@@ -656,7 +656,17 @@ class Session:
 			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
 			if self._delay: time.sleep(random.uniform(*self._delay))
-			transaction.do()
+			# ensure that transaction.do retries after a fail
+			retry = retry or self.DEFAULT_RETRIES
+			for i in range(retry):
+				try:
+					transaction.do()
+					break
+				except httplib.IncompleteRead, e:
+					if i >= retry:
+						raise e
+					else:
+						time.sleep(i)
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			visited = [url]
 			while transaction.redirect() and follow:
