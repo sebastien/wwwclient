@@ -475,10 +475,8 @@ class Session:
 	MAX_TRANSACTIONS = 10
 	DEFAULT_RETRIES  = 5
 	DEFAULT_DELAY    = 1
-	CACHE_TIMEOUT    = 1000
-	CACHE_LIMIT      = 100
 
-	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None ):
+	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None, cache=None ):
 		"""Creates a new session at the given host, and for the given
 		protocol.
 		Keyword arguments::
@@ -497,7 +495,7 @@ class Session:
 		self._follow          = follow
 		self._do              = do
 		self._delay           = delay
-		self._cache           = TimeoutCache(MemoryCache(limit=self.CACHE_LIMIT), timeout=self.CACHE_TIMEOUT)
+		self._cache           = cache
 		if type(personality) in (unicode,str): personality = Personality.Get(personality)
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
@@ -646,13 +644,14 @@ class Session:
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		# search in the cache this request
-		params_str  = params.asURL() if params and isinstance(params, Pairs) else None
-		key         = 'GET+%s+%s' % (url, params_str)
-		key         = hashlib.sha1(key).hexdigest()
-		cache       = self._cache.get(key)
-		if cache:
-			transaction = cache
-		elif do:
+		if _cache:
+			params_str  = params.asURL() if params and isinstance(params, Pairs) else None
+			key         = 'GET+%s+%s' % (url, params_str)
+			key         = hashlib.sha1(key).hexdigest()
+			cache       = self._cache.get(key)
+			if cache:
+				return cache
+		if do:
 			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
 			if self._delay: time.sleep(random.uniform(*self._delay))
@@ -677,7 +676,8 @@ class Session:
 				else:
 					break
 			# we save the transaction in the cache
-			self._cache.set(key, transaction)
+			if _cache:
+				self._cache.set(key, transaction)
 		return transaction
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
@@ -704,13 +704,14 @@ class Session:
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		# search in the cache this request
-		params_str  = params.asURL() if params and isinstance(params, Pairs) else None
-		key         = 'POST+%s+%s' % (url, params_str)
-		key         = hashlib.sha1(key).hexdigest()
-		cache       = self._cache.get(key)
-		if cache:
-			transaction = cache
-		elif do:
+		if _cache:
+			params_str  = params.asURL() if params and isinstance(params, Pairs) else None
+			key         = 'POST+%s+%s' % (url, params_str)
+			key         = hashlib.sha1(key).hexdigest()
+			cache       = self._cache.get(key)
+			if cache:
+				return cache
+		if do:
 			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
 			if self._delay: time.sleep(random.uniform(*self._delay))
@@ -726,7 +727,8 @@ class Session:
 				else:
 					break
 			# we save the transaction in the cache
-			self._cache.set(key, transaction)
+			if _cache:
+				self._cache.set(key, transaction)
 		return transaction
 
 	def submit( self, form, values={}, attach=[], action=None,  method=POST,
