@@ -16,8 +16,9 @@
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time, json
+import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib
 from   wwwclient import client, defaultclient, scrape, agents
+from retro.contrib.cache import TimeoutCache, MemoryCache
 
 HTTP               = "http"
 HTTPS              = "https"
@@ -465,18 +466,21 @@ class Session:
 	- 'transactions':    List of transactions
 	- 'maxTransactions': Maximum number of transactions in registered in
 	                     this session
+	- 'cache':           Cache contained last requests
 	- 'cookies':         List of cookies for this session
 	- 'userAgent':       String for this user session agent
 
 	"""
 
 	MAX_TRANSACTIONS = 10
-	DEFAULT_RETRIES  = 5
+	DEFAULT_RETRIES  = [0.25, 0.5, 1.0, 1.5, 2.0]
 	DEFAULT_DELAY    = 1
 
-	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True ):
+	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None, cache=None ):
 		"""Creates a new session at the given host, and for the given
-		protocol."""
+		protocol.
+		Keyword arguments::
+			'delay':  the range of delay between two requests e.g: (1.5, 3)"""
 		self._httpClient      = defaultclient.HTTPClient()
 		self._host            = None
 		self._port            = 80
@@ -490,6 +494,8 @@ class Session:
 		self._onLog           = None
 		self._follow          = follow
 		self._do              = do
+		self._delay           = delay
+		self._cache           = cache
 		if type(personality) in (unicode,str): personality = Personality.Get(personality)
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
@@ -621,7 +627,7 @@ class Session:
 		else:
 			self._referer = value
 
-	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None ):
+	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[]):
 		"""Gets the page at the given URL, with the optional params (as a `Pair`
 		instance), with the given headers.
 
@@ -637,9 +643,29 @@ class Session:
 		request     = self._createRequest( url=url, params=params, headers=headers, cookies=cookies )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
-		# We do the transaction
+		# search in the cache this request
+		if self._cache:
+			params_str  = params.asURL() if params and isinstance(params, Pairs) else None
+			key         = 'GET+%s+%s' % (url, params_str)
+			key         = hashlib.sha1(key).hexdigest()
+			cache       = self._cache.get(key)
+			if cache:
+				return cache
 		if do:
-			transaction.do()
+			# We do the transaction
+			# set a delay to do the transaction if _delay is specified
+			if self._delay: time.sleep(random.uniform(*self._delay))
+			# ensure that transaction.do retries after a fail
+			retry = retry or self.DEFAULT_RETRIES
+			for i,r in enumerate(retry):
+				try:
+					transaction.do()
+					break
+				except httplib.IncompleteRead, e:
+					if i >= len(retry):
+						raise e
+					else:
+						time.sleep(r)
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			visited = [url]
 			while transaction.redirect() and follow:
@@ -649,10 +675,13 @@ class Session:
 					transaction = self.get(redirect_url, headers=headers, cookies=cookies, do=True)
 				else:
 					break
+			# we save the transaction in the cache
+			if self._cache:
+				self._cache.set(key, transaction)
 		return transaction
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
-	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None ):
+	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None, retry=[]):
 		"""Posts data to the given URL. The optional `params` (`Pairs`) or `data`
 		contain the posted data. The `mimetype` describes the mimetype of the data
 		(if it is a special kind of data). The `fields` is a `Pairs` instance of
@@ -674,8 +703,29 @@ class Session:
 		)
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
+		# search in the cache this request
+		if self._cache:
+			params_str  = params.asURL() if params and isinstance(params, Pairs) else None
+			key         = 'POST+%s+%s' % (url, params_str)
+			key         = hashlib.sha1(key).hexdigest()
+			cache       = self._cache.get(key)
+			if cache:
+				return cache
 		if do:
-			transaction.do()
+			# We do the transaction
+			# set a delay to do the transaction if _delay is specified
+			if self._delay: time.sleep(random.uniform(*self._delay))
+			# ensure that transaction.do retries after a fail
+			retry = retry or self.DEFAULT_RETRIES
+			for i,r in enumerate(retry):
+				try:
+					transaction.do()
+					break
+				except httplib.IncompleteRead, e:
+					if i >= len(retry):
+						raise e
+					else:
+						time.sleep(r)
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			# And follow the redirect if any
 			visited = [url]
@@ -686,6 +736,9 @@ class Session:
 					transaction = self.post(redirect_url, data=data, mimetype=mimetype, fields=fields, attach=attach, headers=headers, cookies=cookies, do=True)
 				else:
 					break
+			# we save the transaction in the cache
+			if self._cache:
+				self._cache.set(key, transaction)
 		return transaction
 
 	def submit( self, form, values={}, attach=[], action=None,  method=POST,
@@ -840,7 +893,6 @@ class Firefox(Personality):
 
 	def __init__( self ):
 		Personality.__init__(self, "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:11.0) Gecko/20100101 Firefox/11.0")
-		print self.agent
 
 	def apply( self, request ):
 		request.header( "User-Agent", self.userAgent())

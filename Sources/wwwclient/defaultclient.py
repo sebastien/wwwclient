@@ -83,22 +83,27 @@ class HTTPClient(client.HTTPClient):
 		return request
 
 	def _performRequest( self, counter=0 ):
-		response = self._http.getresponse()
-		if response.version == 10: res = "HTTP/1.0 "
-		else: res = "HTTP/1.1 "
-		res += str(response.status) + " "
-		res += str(response.reason) + client.CRLF
-		res += str(response.msg) + client.CRLF
-		res += response.read()
-		# Copied from perform request
-		self._status = response.status
-		self._url    = self._url #FIXME: Handle location
-		self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
-		res = self._parseResponse(res)
-		if self._http: self._http.close()
-		self._http = None
-		if self.verbose >= 1:
-			self._log(self.info())
-		return res
+		try:
+			response = self._http.getresponse()
+			if response.version == 10: res = "HTTP/1.0 "
+			else: res = "HTTP/1.1 "
+			res += str(response.status) + " "
+			res += str(response.reason) + client.CRLF
+			res += str(response.msg) + client.CRLF
+			res += response.read()
+			# Copied from perform request
+			self._status = response.status
+			self._url    = self._url #FIXME: Handle location
+			self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
+			res = self._parseResponse(res)
+			if self._http: self._http.close()
+			self._http = None
+			if self.verbose >= 1:
+				self._log(self.info())
+			return res
+		except Exception, e:
+			if self._http: self._http.close()
+			self._http = None
+			raise e
 
 # EOF - vim: tw=80 ts=4 sw=4 noet
