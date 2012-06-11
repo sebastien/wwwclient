@@ -9,7 +9,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 04-Jun-2006
-# Last mod  : 04-Jul-2006
+# Last mod  : 11-Jun-2012
 # -----------------------------------------------------------------------------
 
 import httplib, urlparse, client
@@ -68,7 +68,12 @@ class HTTPClient(client.HTTPClient):
 		if i == -1:
 			raise Exception("URL does not correspond to current host (%s): %s " % (host, url))
 		url_path = url[i+len(host):]
-		self._http = httplib.HTTPConnection(host)
+		if url_parsed[0] == "http":
+			self._http = httplib.HTTPConnection(host)
+		elif url_parsed[0] == "https":
+			self._http = httplib.HTTPSConnection(host)
+		else:
+			raise Exception("Protocol not supported: "  + str(url_parsed[0]))
 		http_headers = {}
 		for header in headers:
 			colon = header.find(":")
