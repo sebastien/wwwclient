@@ -66,6 +66,7 @@ class HTTPClient:
 		self._newCookies = None
 		self._responses  = None
 		self._onLog      = None
+		self._cache      = None
 		self.verbose     = 0
 		self.encoding    = encoding
 		self.retryDelay  = 0.100
@@ -77,6 +78,10 @@ class HTTPClient:
 			self._onLog(*args)
 		else:
 			print " ".join(map(str,args))
+
+	def setCache( self, cache ):
+		"""Set a cache"""
+		self._cache = cache
 
 	def url( self ):
 		"""Returns the last URL processed by this Curl HTTP interface."""

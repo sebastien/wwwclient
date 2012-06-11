@@ -28,9 +28,16 @@ class HTTPClient(client.HTTPClient):
 		strings)."""
 		# We prepare the request
 		if headers == None: headers = ()
+		if self._cache:
+			res = self._cache.get(url)
+			if res:
+				return res
 		self._prepareRequest(method="GET", url=url, headers=headers)
 		# And get the response
-		return self._performRequest()
+		res = self._performRequest()
+		if self._cache:
+			self._cache.set(url, res)
+		return res
 
 	def POST( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None ):
 		# If there is already data given, we check that there is no fields or

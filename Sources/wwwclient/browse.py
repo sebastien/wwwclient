@@ -18,7 +18,6 @@
 
 import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib
 from   wwwclient import client, defaultclient, scrape, agents
-from retro.contrib.cache import TimeoutCache, MemoryCache
 
 HTTP               = "http"
 HTTPS              = "https"
@@ -482,6 +481,7 @@ class Session:
 		Keyword arguments::
 			'delay':  the range of delay between two requests e.g: (1.5, 3)"""
 		self._httpClient      = defaultclient.HTTPClient()
+		if cache: self._httpClient.setCache(cache)
 		self._host            = None
 		self._port            = 80
 		self._protocol        = None
@@ -495,7 +495,6 @@ class Session:
 		self._follow          = follow
 		self._do              = do
 		self._delay           = delay
-		self._cache           = cache
 		if type(personality) in (unicode,str): personality = Personality.Get(personality)
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
@@ -643,14 +642,6 @@ class Session:
 		request     = self._createRequest( url=url, params=params, headers=headers, cookies=cookies )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
-		# search in the cache this request
-		if self._cache:
-			params_str  = params.asURL() if params and isinstance(params, Pairs) else None
-			key         = 'GET+%s+%s' % (url, params_str)
-			key         = hashlib.sha1(key).hexdigest()
-			cache       = self._cache.get(key)
-			if cache:
-				return cache
 		if do:
 			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
@@ -675,9 +666,6 @@ class Session:
 					transaction = self.get(redirect_url, headers=headers, cookies=cookies, do=True)
 				else:
 					break
-			# we save the transaction in the cache
-			if self._cache:
-				self._cache.set(key, transaction)
 		return transaction
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
@@ -703,14 +691,6 @@ class Session:
 		)
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
-		# search in the cache this request
-		if self._cache:
-			params_str  = params.asURL() if params and isinstance(params, Pairs) else None
-			key         = 'POST+%s+%s' % (url, params_str)
-			key         = hashlib.sha1(key).hexdigest()
-			cache       = self._cache.get(key)
-			if cache:
-				return cache
 		if do:
 			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
@@ -736,9 +716,6 @@ class Session:
 					transaction = self.post(redirect_url, data=data, mimetype=mimetype, fields=fields, attach=attach, headers=headers, cookies=cookies, do=True)
 				else:
 					break
-			# we save the transaction in the cache
-			if self._cache:
-				self._cache.set(key, transaction)
 		return transaction
 
 	def submit( self, form, values={}, attach=[], action=None,  method=POST,
