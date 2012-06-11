@@ -541,11 +541,14 @@ class TagTree:
 				predicate = lambda _:predicate and _.hasId(p_id[1:])
 			if p_class:
 				predicate = lambda _:predicate and _.hasClass(p_class[1:])
-			if p_property:
-				raise Exception("Property selector not supproted yet: " + p_property)
 			res = []
 			for sub_tree in self.find(predicate):
 				res = res + sub_tree.query(tail)
+			if p_property:
+				if p_property == ":text":
+					res = map(lambda _:_.text(), res)
+				else:
+					raise Exception("Property selector not supproted yet: " + p_property)
 			if p_count:
 				count = int(p_count[1:-1])
 				if count < 0:
@@ -867,6 +870,8 @@ class HTMLTools:
 				if name: attribs[name] = None
 				return HTML.parseAttributes(text[space+1:], attribs)
 		else:
+			if eq + 1 == len(text):
+				return attribs
 			sep = text[eq+1]
 			if   sep == "'": end = text.find( "'", eq + 2 )
 			elif sep == '"': end = text.find( '"', eq + 2 )
