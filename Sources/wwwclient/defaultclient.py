@@ -27,10 +27,17 @@ class HTTPClient(client.HTTPClient):
 		"""Gets the given URL, setting the given headers (as a list of
 		strings)."""
 		# We prepare the request
+		response = None
 		if headers == None: headers = ()
-		self._prepareRequest(method="GET", url=url, headers=headers)
-		# And get the response
-		return self._performRequest()
+		if self._cache:
+			response = self._cache.get(url)
+		if not response:
+			self._prepareRequest(method="GET", url=url, headers=headers)
+			# And get the response
+			response = self._performRequest()
+			if self._cache:
+				self._cache.set(url, response)
+		return self._finaliseRequest(response, url)
 
 	def POST( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None ):
 		# If there is already data given, we check that there is no fields or
@@ -55,11 +62,11 @@ class HTTPClient(client.HTTPClient):
 		# We prepare the request
 		self._prepareRequest(method="POST", url=url, headers=headers, body=data)
 		# And get the response
-		return self._performRequest()
+		response = self._performRequest()
+		return self._finaliseRequest(response, url)
 
 	def _prepareRequest( self, url, headers=(), body=None, method="GET" ):
 		assert self._http == None, "Only one request is allowed per instance"
-		self._url  = url = self._absoluteURL(url)
 		url_parsed = urlparse.urlparse(url)
 		host       = url_parsed[1] or self.host()
 		if not host:
@@ -96,19 +103,22 @@ class HTTPClient(client.HTTPClient):
 			res += str(response.reason) + client.CRLF
 			res += str(response.msg) + client.CRLF
 			res += response.read()
-			# Copied from perform request
-			self._status = response.status
-			self._url    = self._url #FIXME: Handle location
-			self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
-			res = self._parseResponse(res)
 			if self._http: self._http.close()
 			self._http = None
-			if self.verbose >= 1:
-				self._log(self.info())
 			return res
 		except Exception, e:
 			if self._http: self._http.close()
 			self._http = None
 			raise e
 
+	def _finaliseRequest( self, response, url ):
+			self._url    = self._absoluteURL(url)
+			# Copied from perform request
+			self._status = response.split()[1]
+			res          = self._parseResponse(response)
+			self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
+			if self.verbose >= 1:
+				self._log(self.info())
+			return res
+			
 # EOF - vim: tw=80 ts=4 sw=4 noet
