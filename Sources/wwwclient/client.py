@@ -82,7 +82,7 @@ class HTTPClient:
 	def setCache( self, cache ):
 		"""Set a cache"""
 		self._cache = cache
-
+	
 	def url( self ):
 		"""Returns the last URL processed by this Curl HTTP interface."""
 		return self._url

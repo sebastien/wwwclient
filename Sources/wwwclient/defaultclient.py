@@ -19,27 +19,45 @@ class HTTPClient(client.HTTPClient):
 	"""Sends and manages HTTP requests using the 'httplib' and 'urlparse'
 	modules. Using the 'curlclient' may be more efficient than using this one."""
 
+	TIMEOUT = 10
+
 	def __init__( self, encoding="latin-1" ):
 		client.HTTPClient.__init__(self, encoding)
 		self._http = None
 
-	def GET( self, url, headers=None ):
+	def GET  ( self, url, headers=None ):
+		return self._request(url, headers, "GET")
+
+	def HEAD ( self, url, headers=None ):
+		return self._request(url, headers, "HEAD")
+
+	def INFO ( self, url, headers=None ):
+		return self._request(url, headers, "INFO")
+
+	def POST ( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None):
+		return self._submit(url,data,mimetype,fields,attach,headers,"POST")
+
+	def UPDATE ( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None):
+		return self._submit(url,data,mimetype,fields,attach,headers,"UPDATE")
+
+	def _request( self, url, headers=None, method="GET" ):
 		"""Gets the given URL, setting the given headers (as a list of
 		strings)."""
 		# We prepare the request
 		response = None
 		if headers == None: headers = ()
+		cache_key = None
 		if self._cache:
 			response = self._cache.get(url)
 		if not response:
-			self._prepareRequest(method="GET", url=url, headers=headers)
+			self._prepareRequest(method=method, url=url, headers=headers)
 			# And get the response
 			response = self._performRequest()
 			if self._cache:
 				self._cache.set(url, response)
 		return self._finaliseRequest(response, url)
 
-	def POST( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None ):
+	def _submit( self, url, data=None, mimetype=None, fields=None, attach=None, headers=None, method="POST" ):
 		# If there is already data given, we check that there is no fields or
 		# attachments
 		if data:
@@ -60,7 +78,7 @@ class HTTPClient(client.HTTPClient):
 		# We add the Content-Length header to the headers list
 		headers.append("Content-Length: " + self._valueToString(len(data)))
 		# We prepare the request
-		self._prepareRequest(method="POST", url=url, headers=headers, body=data)
+		self._prepareRequest(method=method, url=url, headers=headers, body=data)
 		# And get the response
 		response = self._performRequest()
 		return self._finaliseRequest(response, url)
@@ -76,9 +94,9 @@ class HTTPClient(client.HTTPClient):
 			raise Exception("URL does not correspond to current host (%s): %s " % (host, url))
 		url_path = url[i+len(host):]
 		if url_parsed[0] == "http":
-			self._http = httplib.HTTPConnection(host)
+			self._http = httplib.HTTPConnection(host, timeout=self.TIMEOUT)
 		elif url_parsed[0] == "https":
-			self._http = httplib.HTTPSConnection(host)
+			self._http = httplib.HTTPSConnection(host, timeout=self.TIMEOUT)
 		else:
 			raise Exception("Protocol not supported: "  + str(url_parsed[0]))
 		http_headers = {}
@@ -113,7 +131,6 @@ class HTTPClient(client.HTTPClient):
 
 	def _finaliseRequest( self, response, url ):
 			self._url    = self._absoluteURL(url)
-			# Copied from perform request
 			self._status = response.split()[1]
 			res          = self._parseResponse(response)
 			self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
