@@ -135,11 +135,11 @@ class HTTPClient:
 
 	def info( self ):
 		return "\n".join((
-			"URL          : %s" % (self.url()),
-			"Status       : %s" % (self.status()),
-			"Redirect     : %s" % (self.redirect()),
-			"New-Cookies  : %s" % (self.newCookies()),
-			"Responses    : %s [%sb]" % (len(self.responses()),self.dataSize()),
+			"URL           : %s" % (self.url()),
+			"- status      : %s" % (self.status()),
+			"- redirect    : %s" % (self.redirect()),
+			"- cookies(new): %s" % (self.newCookies()),
+			"- responses   : #%s (%sbytes)" % (len(self.responses()),self.dataSize()),
 		))
 
 	def encode( self, fields=(), attach=() ):
