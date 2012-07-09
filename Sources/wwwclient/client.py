@@ -58,6 +58,7 @@ class HTTPClient:
 	def __init__( self, encoding="latin-1" ):
 		"""Creates a new HTTPClient with the given 'encoding' as default
 		encofing ('latin-1' is the default)."""
+		self._method     = "GET"
 		self._url        = None
 		self._host       = None
 		self._protocol   = None
@@ -83,8 +84,12 @@ class HTTPClient:
 		"""Set a cache"""
 		self._cache = cache
 	
+	def method( self ):
+		"""Returns the method of the last request by this HTTP client."""
+		return self._method
+
 	def url( self ):
-		"""Returns the last URL processed by this Curl HTTP interface."""
+		"""Returns the last URL processed by this HTTP client."""
 		return self._url
 	
 	def host( self ):
@@ -133,14 +138,15 @@ class HTTPClient:
 			total += len(r)
 		return total
 
-	def info( self ):
-		return "\n".join((
-			"URL           : %s" % (self.url()),
-			"- status      : %s" % (self.status()),
-			"- redirect    : %s" % (self.redirect()),
-			"- cookies(new): %s" % (self.newCookies()),
-			"- responses   : #%s (%sbytes)" % (len(self.responses()),self.dataSize()),
-		))
+	def info( self, level=1 ):
+		return "%s %s (%s)" % (self.method(), self.url(), self.status())
+		# return "\n".join((
+		# 	"URL           : %s" % (self.url()),
+		# 	"- status      : %s" % (self.status()),
+		# 	"- redirect    : %s" % (self.redirect()),
+		# 	"- cookies(new): %s" % (self.newCookies()),
+		# 	"- responses   : #%s (%sbytes)" % (len(self.responses()),self.dataSize()),
+		# ))
 
 	def encode( self, fields=(), attach=() ):
 		"""Encodes the given fields and attachments (as given to POST) and
