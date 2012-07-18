@@ -44,6 +44,30 @@ KEEP_BELOW    = "-"
 
 # -----------------------------------------------------------------------------
 #
+# URL
+#
+# -----------------------------------------------------------------------------
+
+class URL:
+
+	@classmethod
+	def Base( self, url ):
+		base_url = url
+		if not url.endswith("/"):
+			i = base_url.rfind("/")
+			if i > 0:
+				base_url = base_url[:i + 1]
+		return base_url
+
+	@classmethod
+	def Absolute( self, url, siteURL ):
+		base_url = self.Base(siteURL)
+		if url.find("http") != 0:
+			url = base_url + url
+		return url
+
+# -----------------------------------------------------------------------------
+#
 # HTML TAG INTERFACE
 #
 # -----------------------------------------------------------------------------

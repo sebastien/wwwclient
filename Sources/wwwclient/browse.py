@@ -762,7 +762,7 @@ class Session:
 			retry -= 1
 		return res
 
-	def savePage(self, path, transaction=None):
+	def save(self, path, transaction=None):
 		"""Saves the page from the given transaction (default it 'last()') to
 		the given file."""
 		if transaction is None: transaction = self.last()
