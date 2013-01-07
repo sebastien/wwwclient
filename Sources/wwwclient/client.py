@@ -337,18 +337,22 @@ class HTTPClient:
 		headers += "\r\n"
 		location    = RE_LOCATION.search(headers)
 		if location: location = location.group(1).strip()
-		set_cookie = RE_SET_COOKIE.search(headers)
-		if set_cookie: set_cookie = set_cookie.group(1).strip()
+		cookies    = RE_SET_COOKIE.findall(headers)
+		set_cookie = ";".join(cookies)
 		return location, set_cookie
 	
 	def _parseCookies( self, cookies ):
 		"""Returns a pair (name, value) for the given cookies, given as text."""
-		res = []
+		_cookies   = {}
 		if not cookies: return res
 		for cookie in cookies.split(";"):
 			equal = cookie.find("=")
-			key   = cookie[:equal].strip()
-			value = cookie[equal+1:].strip()
+			if equal > 0:
+				key           = cookie[:equal].strip()
+				value         = cookie[equal+1:].strip()
+				_cookies[key] = value
+		res = []
+		for key, value in _cookies.items():
 			res.append((key, value))
 		return res
 
