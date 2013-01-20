@@ -807,20 +807,20 @@ class HTMLTools:
 	def links( self, html, like=None ):
 		"""Iterates through the links found in this document. This yields the
 		tag name and the href value."""
-		if not html: raise Exception("No data: " + repr(html))
-		html = self.html(html)
-		if like != None:
-			if type(like) in (str,unicode): like = re.compile(like)
-		res = []
-		for match in self.onRE(html, RE_HTMLLINK):
-			tag  = match.group()
-			tag  = tag.replace("\t"," ")
-			tag  = tag.replace("\n"," ")
-			tag  = tag[1:tag.find(" ")]
-			href = match.group(2)
-			if href[0] in ("'", '"'): href = href[1:-1]
-			if not like or like.match(href):
-				yield tag, href
+		if html:
+			html = self.html(html)
+			if like != None:
+				if type(like) in (str,unicode): like = re.compile(like)
+			res = []
+			for match in self.onRE(html, RE_HTMLLINK):
+				tag  = match.group()
+				tag  = tag.replace("\t"," ")
+				tag  = tag.replace("\n"," ")
+				tag  = tag[1:tag.find(" ")]
+				href = match.group(2)
+				if href[0] in ("'", '"'): href = href[1:-1]
+				if not like or like.match(href):
+					yield tag, href
 
 	# UTILITIES
 	# ========================================================================

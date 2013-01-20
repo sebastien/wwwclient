@@ -34,13 +34,13 @@ among different sessions.
 FILE_ATTACHMENT    = 0
 CONTENT_ATTACHMENT = 1
 
-RE_CONTENT_LENGTH  = re.compile("\s*Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
-RE_CONTENT_ENCODING= re.compile("\s*Content-Encoding\s*:(.*)\r\n", re.I|re.MULTILINE)
-RE_CONTENT_TYPE    = re.compile("\s*Content-Type\s*:(.*)\r\n",   re.I|re.MULTILINE)
+RE_CONTENT_LENGTH  = re.compile("^\s*Content-Length\s*:\s*([0-9]+)", re.I|re.MULTILINE)
+RE_CONTENT_ENCODING= re.compile("^\s*Content-Encoding\s*:(.*)\r\n", re.I|re.MULTILINE)
+RE_CONTENT_TYPE    = re.compile("^\s*Content-Type\s*:(.*)\r\n",   re.I|re.MULTILINE)
 RE_CHARSET         = re.compile("\s*charset=([\w\d_-]+)",           re.I|re.MULTILINE)
-RE_LOCATION        = re.compile("\s*Location\s*:(.*)\r\n",          re.I|re.MULTILINE)
-RE_SET_COOKIE      = re.compile("\s*Set-Cookie\s*:(.*)\r\n",        re.I|re.MULTILINE)
-RE_CHUNKED         = re.compile("\s*Transfer-Encoding\s*:\s*chunked\s*\r\n", re.I|re.MULTILINE)
+RE_LOCATION        = re.compile("^\s*Location\s*:(.*)\r\n",          re.I|re.MULTILINE)
+RE_SET_COOKIE      = re.compile("^\s*Set-Cookie\s*:(.*)\r\n",        re.I|re.MULTILINE)
+RE_CHUNKED         = re.compile("^\s*Transfer-Encoding\s*:\s*chunked\s*\r\n", re.I|re.MULTILINE)
 CRLF               = "\r\n"
 BOUNDARY           = '----------fbb6cc131b52e5a980ac702bedde498032a88158$'
 DEFAULT_MIMETYPE   = 'text/plain'
@@ -267,6 +267,8 @@ class HTTPClient:
 			if eoh == -1: eoh = len(message)
 			first_line       = message[off:eol]
 			headers          = message[eol+2:eoh]
+			# FIXME: This is not very efficient, we should parse all headers
+			# into a structure, rahter than searching
 			charset          = RE_CHARSET.search(headers)
 			is_chunked       = RE_CHUNKED.search(headers)
 			content_length   = RE_CONTENT_LENGTH.search(headers)
@@ -298,7 +300,8 @@ class HTTPClient:
 					body = self._decodeBody(message[eoh+4:], content_encoding, encoding)
 				off = len(message)
 			location, cookies = self._parseStatefulHeaders(headers)
-			self._redirect   = location
+			# WTF: 
+			self._redirect    = location
 			self._newCookies.extend(self._parseCookies(cookies))
 			# FIXME: I don't know if it works properly, but at least it handles
 			# responses from <http://www.contactor.se/~dast/postit.cgi> properly.
@@ -337,7 +340,7 @@ class HTTPClient:
 		headers += "\r\n"
 		location    = RE_LOCATION.search(headers)
 		if location: location = location.group(1).strip()
-		set_cookie = RE_SET_COOKIE.search(headers)
+		set_cookie  = RE_SET_COOKIE.search(headers)
 		if set_cookie: set_cookie = set_cookie.group(1).strip()
 		return location, set_cookie
 	

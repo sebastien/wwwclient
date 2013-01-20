@@ -9,7 +9,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 19-Mar-2012
+# Last mod  : 18-Dec-2012
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
@@ -118,8 +118,18 @@ class Pairs:
 			for name, value in parameters.items():
 				self.add(name, value)
 		elif type(parameters) in (tuple, list):
-			for name, value in parameters:
-				self.add(name, value)
+			for v in parameters:
+				if type(v) in (tuple, list):
+					name, value = v
+					self.add(name, value)
+				elif type(v) in (str, unicode):
+					if v:
+						name, value = v.split(":", 1)
+						self.add(name.strip(), value.strip())
+				else:
+					raise Exception("Pair.merge: Unsupported type for merging %s" % (parameters))
+		elif type(parameters) in (str, unicode):
+			return self.merge(parameters.split("\n"))
 		elif isinstance(parameters, Pairs):
 			for name, value in parameters.pairs:
 				self.add(name, value)
@@ -207,9 +217,6 @@ class Request:
 		# Ensures that the method is a proper one
 		if self._method not in METHODS:
 			raise Exception("Method not supported: %s" % (method))
-		if headers:
-			for h,v in headers.items():
-				self.header(h,v)
 		if mimetype:
 			self.header("Content-Type", mimetype)
 
@@ -405,6 +412,11 @@ class Transaction:
 				request.url(),
 				headers=request.headers().asHeaders()
 			)
+		elif request.method() == HEAD:
+			responses = self._client.HEAD(
+				request.url(),
+				headers=request.headers().asHeaders()
+			)
 		# Or as a POST
 		elif request.method() == POST:
 			responses = self._client.POST(
@@ -472,6 +484,7 @@ class Session:
 	"""
 
 	MAX_TRANSACTIONS = 10
+	REDIRECT_LIMIT   = 5
 	DEFAULT_RETRIES  = [0.25, 0.5, 1.0, 1.5, 2.0]
 	DEFAULT_DELAY    = 1
 
@@ -626,7 +639,10 @@ class Session:
 		else:
 			self._referer = value
 
-	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[]):
+	def head( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[] ):
+		return self.get(url=url, params=params, headers=headers, follow=follow, do=do, cookies=cookies, retry=retry, method=HEAD)
+
+	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[], method=GET):
 		"""Gets the page at the given URL, with the optional params (as a `Pair`
 		instance), with the given headers.
 
@@ -639,7 +655,7 @@ class Session:
 		if do is None: do = self._do
 		# TODO: Return data instead of session
 		url = self.__processURL(url)
-		request     = self._createRequest( url=url, params=params, headers=headers, cookies=cookies )
+		request     = self._createRequest( url=url, params=params, headers=headers, cookies=cookies, method=method )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
 		if do:
@@ -658,16 +674,18 @@ class Session:
 					else:
 						time.sleep(r)
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
-			visited = [url]
-			while transaction.redirect() and follow:
+			visited   = [url]
+			iteration = 0
+			while transaction.redirect() and follow and iteration < self.REDIRECT_LIMIT:
 				redirect_url = self.__processURL(transaction.redirect(), store=False)
 				if not (redirect_url in visited):
 					visited.append(redirect_url)
-					transaction = self.get(redirect_url, headers=headers, cookies=cookies, do=True)
+					transaction = self.get(redirect_url, headers=headers, cookies=cookies, do=True, method=method, follow=False)
 				else:
 					break
 		return transaction
 
+	
 	def post( self, url=None, params=None, data=None, mimetype=None,
 	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None, retry=[]):
 		"""Posts data to the given URL. The optional `params` (`Pairs`) or `data`
@@ -739,7 +757,7 @@ class Session:
 		# FIXME: Manage encodings consistently
 		if method == POST or attach:
 			return self.post( url, fields=fields, attach=attach, do=do, cookies=cookies )
-		elif method == GET:
+		elif method in (GET, HEAD):
 			assert not attach, "Attachments are incompatible with GET submission"
 			return self.get( url,  params=fields, do=do, cookies=cookies )
 		else:
