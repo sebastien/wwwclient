@@ -344,6 +344,7 @@ class HTTPClient:
 	def _parseCookies( self, cookies ):
 		"""Returns a pair (name, value) for the given cookies, given as text."""
 		_cookies   = {}
+		res        = []
 		if not cookies: return res
 		for cookie in cookies.split(";"):
 			equal = cookie.find("=")
@@ -351,7 +352,6 @@ class HTTPClient:
 				key           = cookie[:equal].strip()
 				value         = cookie[equal+1:].strip()
 				_cookies[key] = value
-		res = []
 		for key, value in _cookies.items():
 			res.append((key, value))
 		return res
