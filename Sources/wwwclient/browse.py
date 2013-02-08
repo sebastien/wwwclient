@@ -9,14 +9,14 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 18-Dec-2012
+# Last mod  : 08-Feb-2013
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib
+import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib, base64
 from   wwwclient import client, defaultclient, scrape, agents
 
 HTTP               = "http"
@@ -444,6 +444,9 @@ class Transaction:
 	def asTree( self ):
 		return scrape.HTML.tree(self.data())
 
+	def unjson( self ):
+		return json.loads(self.data())
+
 	def query( self, selector ):
 		"""Converts the current transaction to an HTML/XML tree and applies
 		the given CSS selector query."""
@@ -508,6 +511,7 @@ class Session:
 		self._follow          = follow
 		self._do              = do
 		self._delay           = delay
+		self._headers         = []
 		if type(personality) in (unicode,str): personality = Personality.Get(personality)
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
@@ -530,6 +534,13 @@ class Session:
 			self._onLog(*args)
 		else:
 			sys.stderr.write(" ".join(map(str,args)) + "\n")
+
+	def auth( self, user, passwd ):
+		"""Adds an HTTP Authentication header to the curent session based on the given
+		user and password."""
+		self._headers = filter(lambda _:_[0]!="Authorization", self._headers)
+		self._headers.append(("Authorization", "Basic " + base64.b64encode(user + ":" + passwd)))
+		return self
 
 	def setLogger( self, callback ):
 		"""Sets the logger callback (only enabled when the session is set to
@@ -802,7 +813,7 @@ class Session:
 		else:
 			# Otherwise we expect to be on the same server (and then just the
 			# path is given)
-			assert self._host, "No host was given to url"
+			assert self._host, "No host was given to url: {0}".format(url)
 			protocol, host, path, parameters, query, fragment =  urlparse.urlparse(
 				"%s://%s:%s%s" % (
 					(self._protocol or HTTP),
@@ -838,6 +849,8 @@ class Session:
 		return url
 
 	def _createRequest( self, **kwargs ):
+		# We copyt the session headers (ie. authentication)
+		kwargs["headers"] = (kwargs.get("headers") or []) + self._headers
 		request = Request(**kwargs)
 		last    = self.last()
 		if self.referer(): request.header("Referer", self.referer())
