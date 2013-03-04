@@ -9,14 +9,14 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 08-Feb-2013
+# Last mod  : 04-Mar-2013
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib, base64
+import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib, base64, socket
 from   wwwclient import client, defaultclient, scrape, agents
 
 HTTP               = "http"
@@ -51,6 +51,23 @@ def fix(s, charset='utf-8'):
 	path = urllib.quote(path, '/%')
 	qs = urllib.quote_plus(qs, ':&=')
 	return urlparse.urlunsplit((scheme, netloc, path, qs, anchor))
+
+def retry( function, times=5, wait=(0.1, 0.5, 1, 1.5, 2), exception=None):
+	"""Retries the given function at most `times`, waiting wait seconds. If
+	wait is an array, the `wait[0]` will be waited on the first try, 
+	`wait[1]` on the second, and so on."""
+	if times <= 0:
+		raise exception
+	if type(wait) in (tuple, list):
+		delay = wait[0]
+		wait  = wait[1:] if len(wait) > 1 else wait
+	else:
+		delay = wait
+	try:
+		return function()
+	except Exception, e:
+		time.sleep(delay)
+		return retry(function, times - 1, wait, e)
 
 # -----------------------------------------------------------------------------
 #
@@ -669,6 +686,7 @@ class Session:
 		request     = self._createRequest( url=url, params=params, headers=headers, cookies=cookies, method=method )
 		transaction = Transaction( self, request )
 		self.__addTransaction(transaction)
+		# FIXME: Redo on timeout
 		if do:
 			# We do the transaction
 			# set a delay to do the transaction if _delay is specified
