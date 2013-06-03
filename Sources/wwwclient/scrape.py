@@ -8,7 +8,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 19-Mar-2012
+# Last mod  : 31-May-2013
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -25,7 +25,6 @@ functions are text oriented, so that they work with any subset of an HTML
 document. This is very useful, as it does not require the HTML to be
 well-formed, and allows easy selection of HTML fragments."""
 
-DEFAULT_ENCODING = "utf-8"
 RE_SPACES    = re.compile("\s+")
 RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
@@ -163,7 +162,7 @@ class ElementTag(Tag):
 		"""Tells if the element has the given id (case sensitive)"""
 		return self.attributes().get("id") == name
 
-	def text(self, encoding=DEFAULT_ENCODING):
+	def text(self, encoding=None):
 		return u''
 
 class TextTag(Tag):
@@ -183,8 +182,10 @@ class TextTag(Tag):
 		"""Tells if the element has the given id (case sensitive)"""
 		return False
 
-	def text(self, encoding=DEFAULT_ENCODING):
-		return self._html[self.start:self.end].decode(encoding)
+	def text(self, encoding=None):
+		text = self._html[self.start:self.end]
+		if encoding: text = text.decode(encoding)
+		return text
 
 	def name(self):
 		return "#text"
@@ -301,7 +302,7 @@ class TagList:
 			res.append(tag.html())
 		return "".join(res)
 
-	def text(self, encoding=DEFAULT_ENCODING):
+	def text(self, encoding=None):
 		res = []
 		for tag in self.content:
 			res.append(tag.text(encoding))
@@ -732,7 +733,7 @@ class HTMLTools:
 		if not empty: lines = filter(lambda x:x, lines)
 		return lines
 
-	def text( self, data, expand=False, norm=False ):
+	def text( self, data, expand=False, normalize=False ):
 		"""Strips the given tags from HTML text"""
 		res = None
 		if type(data) in (str, unicode):
@@ -740,7 +741,7 @@ class HTMLTools:
 		else:
 			res = data.text()
 		if expand: res = self.expand(res)
-		if norm: res = self.norm(res)
+		if normalize: res = self.normalize(res)
 		return res
 
 	def expand( self, text, encoding=None ):
@@ -852,7 +853,7 @@ class HTMLTools:
 				yield res
 
 	@staticmethod
-	def norm( text ):
+	def normalize( text ):
 		"""Normalizes the spaces (\t, \n, etc) so that everything gets converted
 		to single space."""
 		return RE_SPACES.sub(" ", text).strip()

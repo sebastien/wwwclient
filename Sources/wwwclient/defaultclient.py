@@ -9,10 +9,10 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 04-Jun-2006
-# Last mod  : 09-Jul-2012
+# Last mod  : 08-Mar-2013
 # -----------------------------------------------------------------------------
 
-import httplib, urlparse, client
+import httplib, urlparse, client, logging
 
 # TODO: Add retry support
 class HTTPClient(client.HTTPClient):
@@ -91,7 +91,11 @@ class HTTPClient(client.HTTPClient):
 		return result
 
 	def _prepareRequest( self, url, headers=(), body=None, method="GET" ):
-		assert self._http == None, "Only one request is allowed per instance"
+		# We close any pre-existing connection
+		if self._http:
+			logging.warning("Client had previously unclosed connection: {0}".format(self._url))
+		self._closeConnection()
+		self._url  = url
 		url_parsed = urlparse.urlparse(url)
 		host       = url_parsed[1] or self.host()
 		if not host:
@@ -128,12 +132,10 @@ class HTTPClient(client.HTTPClient):
 			res += str(response.reason) + client.CRLF
 			res += str(response.msg) + client.CRLF
 			res += response.read()
-			if self._http: self._http.close()
-			self._http = None
+			self._closeConnection()
 			return res
 		except Exception, e:
-			if self._http: self._http.close()
-			self._http = None
+			self._closeConnection()
 			raise e
 
 	def _finaliseRequest( self, response, url, method ):
@@ -142,6 +144,12 @@ class HTTPClient(client.HTTPClient):
 		self._status = response.split()[1]
 		res          = self._parseResponse(response)
 		self._protocol, self._host, _, _, _, _ = urlparse.urlparse(self._url)
+		self._closeConnection()
 		return res
-			
+
+	def _closeConnection( self ):
+		if self._http:
+			self._http.close()
+			self._http = None
+
 # EOF - vim: tw=80 ts=4 sw=4 noet

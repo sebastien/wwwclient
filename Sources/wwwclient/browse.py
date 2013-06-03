@@ -564,11 +564,11 @@ class Session:
 		'verbose'"""
 		self._onLog = self._httpClient._onLog = callback
 
-	def asFireFox( self ):
-		"""Sets this session personality to be FireFox. This returns the
-		'FireFox' personaly instance that will be bound to this session, you can
+	def asFirefox( self ):
+		"""Sets this session personality to be Firefox. This returns the
+		'Firefox' personaly instance that will be bound to this session, you can
 		later change it."""
-		return self.setPersonality(FireFox())
+		return self.setPersonality(Firefox())
 
 	def setPersonality( self, personality ):
 		self._personality = personality
@@ -667,10 +667,10 @@ class Session:
 		else:
 			self._referer = value
 
-	def head( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[] ):
-		return self.get(url=url, params=params, headers=headers, follow=follow, do=do, cookies=cookies, retry=retry, method=HEAD)
+	def head( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[], cache=True ):
+		return self.get(url=url, params=params, headers=headers, follow=follow, do=do, cookies=cookies, retry=retry, method=HEAD, cache=cache)
 
-	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[], method=GET):
+	def get( self, url="/", params=None, headers=None, follow=None, do=None, cookies=None, retry=[], method=GET, cache=True):
 		"""Gets the page at the given URL, with the optional params (as a `Pair`
 		instance), with the given headers.
 
@@ -716,7 +716,7 @@ class Session:
 
 	
 	def post( self, url=None, params=None, data=None, mimetype=None,
-	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None, retry=[]):
+	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None, retry=[], cache=True):
 		"""Posts data to the given URL. The optional `params` (`Pairs`) or `data`
 		contain the posted data. The `mimetype` describes the mimetype of the data
 		(if it is a special kind of data). The `fields` is a `Pairs` instance of
@@ -821,6 +821,7 @@ class Session:
 	def __processURL( self, url, store=True ):
 		"""Processes the given URL, by storing the host and protocol, and
 		returning a normalized, absolute URL"""
+		# FIXME: Should infer the URL based on the current URL
 		old_url = url
 		if url == None and not self._transactions: url = "/"
 		if url == None and self._transactions: url = self.last().request.url()
@@ -854,7 +855,7 @@ class Session:
 				self._host = host
 				self._port = port
 		# We recompose the url
-		if port:
+		if port and port != 80 and port != "80":
 			url = "%s://%s:%s" % (protocol, host, port)
 		else:
 			url = "%s://%s" % (protocol, host)
