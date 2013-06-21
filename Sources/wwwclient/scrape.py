@@ -26,7 +26,7 @@ document. This is very useful, as it does not require the HTML to be
 well-formed, and allows easy selection of HTML fragments."""
 
 RE_SPACES    = re.compile("\s+")
-RE_HTMLSTART = re.compile("</?(\w+)",      re.I)
+RE_HTMLSTART = re.compile("</?((\w+:)?\w+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
 RE_HTMLLINK  = re.compile("<[^<]+(href|src|url)\s*=\s*('[^']*'|\"[^\"]*\"|[^ >]*)", re.I)
 
@@ -35,7 +35,7 @@ RE_HTMLID    = re.compile("id\s*=\s*['\"]?([\w\-_\d]+)", re.I)
 RE_HTMLHREF  = re.compile("href\s*=\s*('[^']*'|\"[^\"]*\"|[^ ]*)", re.I)
 
 RE_SPACES    = re.compile("\s+", re.MULTILINE)
-RE_QUERY     = re.compile("^(?P<name>[\w\d_\-]+)?(?P<id>#[\w\d_\-]+)?(?P<class>\.[\w\d_\-]+)?(?P<property>\:[\w\d\-]+)?(?P<count>\[\-?\d+\])?$")
+RE_QUERY     = re.compile("^(?P<name>(\w+:)?[\w\d_\-]+)?(?P<id>#[\w\d_\-]+)?(?P<class>\.[\w\d_\-]+)?(?P<property>\:[\w\d\-]+)?(?P<count>\[\-?\d+\])?$")
 
 KEEP_ABOVE    = "+"
 KEEP_SAME     = "="
