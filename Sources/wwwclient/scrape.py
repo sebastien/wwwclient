@@ -8,7 +8,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 31-May-2013
+# Last mod  : 25-Aug-2013
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -16,8 +16,12 @@
 # would allow to have still one structure. Ideally, the original HTML could be
 # kept to allow easy subset extraction (currently, the data is recreated)
 
+# FIXME: This does not support CDATA and PI nodes
+
 import re, string, htmlentitydefs
-import form
+import wwwclient.form
+import wwwclient.browse
+
 
 __doc__ = """\
 The scraping module gives a set of functionalities to manipulate HTML data. All
@@ -83,7 +87,7 @@ class Tag:
 		self._html  = html
 		self.start  = start
 		self.end    = end
-	
+
 	def isElement( self ):
 		return isinstance(self, ElementTag)
 
@@ -165,6 +169,9 @@ class ElementTag(Tag):
 	def text(self, encoding=None):
 		return u''
 
+	def __getitem__( self, name ):
+		return self.get(name)
+
 class TextTag(Tag):
 	"""Represents raw text, not an element."""
 
@@ -202,7 +209,7 @@ class TagList:
 		self.content = content
 
 	def append( self, content ):
-		assert isinstance(content, Tag) 
+		assert isinstance(content, Tag)
 		content.context = self
 		self.content.append(content)
 		return content
@@ -212,7 +219,7 @@ class TagList:
 		erase the content of this tag list, replacing it by this one."""
 		self.content = []
 		offset    = 0
-		level     = 0 
+		level     = 0
 		end       = False
 		if scraper == None: scraper = HTML
 		while not end:
@@ -294,7 +301,7 @@ class TagList:
 			assert isinstance(tag, Tag) or isinstance(tag, TextTag)
 			res.append(tag.html())
 		return "".join(res)
-	
+
 	def innerhtml(self):
 		res = []
 		for tag in self.content[1:-1]:
@@ -309,10 +316,13 @@ class TagList:
 		# FIXME: Unicode
 		return u"".join(res)
 
+	def withName( self, name ):
+		return [_ for _ in self if _.name() == name]
+
 	def __iter__( self ):
 		for tag in self.content:
 			yield tag
-	
+
 	def __str__( self ):
 		return str(self.content)
 
@@ -338,14 +348,14 @@ class TagTree:
 		self.name      = None
 		self.open(startTag)
 		self.close(endTag)
-	
+
 	def clone( self, children=None ):
 		"""Clones this tree. If the 'children' attribute is 'True', then the
 		children will be cloned as well (deep clone)."""
 		clone           = TagTree()
 		clone._parent   = self._parent
 		clone._depth    = self._depth
-		clone._taglist  = self._taglist 
+		clone._taglist  = self._taglist
 		clone.id        = self.id
 		clone.name      = self.name
 		if children is None:
@@ -403,7 +413,7 @@ class TagTree:
 			data.append(self)
 		else:
 			for child in self.children:
-				child._cutBelow(data, value) 
+				child._cutBelow(data, value)
 		return data
 
 	def cut( self, above=None, below=None, at=None):
@@ -527,9 +537,9 @@ class TagTree:
 			if self._parent == None:
 				res =  "#root\n"
 			else:
-				res =  self.startTag.name() 
+				res =  self.startTag.name()
 				res += "["
-				if self.id != None: res += "#%d" % (self.id) 
+				if self.id != None: res += "#%d" % (self.id)
 				attr  = []
 				for k,v in self.attributes().items():attr.append("%s=%s" % (k,v))
 				attr = ",".join(attr)
@@ -589,7 +599,7 @@ class TagTree:
 
 	def __str__( self ):
 		return self.prettyString()
-	
+
 	def __repr__( self ):
 		return str(self.list())
 
@@ -658,7 +668,7 @@ class HTMLTools:
 
 	def __init__( self ):
 		pass
-	
+
 	# PREDICATES
 	# ========================================================================
 
@@ -677,11 +687,18 @@ class HTMLTools:
 		"""Returns a tagtree from the given HTML string, tag list or tree
 		node."""
 		return self.tree(html)
-	
-	def tree( self, html, asXML=False ):
-		tag_list = TagList()
-		tag_list.fromHTML(html, scraper=self)
-		return tag_list.tagtree(asXML)
+
+	def tree( self, data, asXML=False ):
+		if type(data) in (str, unicode):
+			tag_list = TagList()
+			tag_list.fromHTML(data, scraper=self)
+			return tag_list.tagtree(asXML)
+		elif isinstance(data, wwwclient.browse.Session):
+			return self.tree(data.last().data())
+		elif isinstance(data, wwwclient.browse.Transaction):
+			return self.tree(data.data())
+		else:
+			raise Exception("Unsupported data:" + data)
 
 	def list( self, data ):
 		"""Converts the given text or tagtree into a taglist."""
@@ -689,6 +706,10 @@ class HTMLTools:
 			tag_list = TagList()
 			tag_list.fromHTML(data, scraper=self)
 			return tag_list
+		elif isinstance(data, wwwclient.browse.Session):
+			return self.list(data.last().data())
+		elif isinstance(data, wwwclient.browse.Transaction):
+			return self.list(data.data())
 		elif isinstance(data, TagList):
 			return data
 		elif isinstance(data, TagTree):
@@ -698,11 +719,15 @@ class HTMLTools:
 
 	def html( self, data ):
 		"""Converts the given taglist or tagtree into HTML, and returns
-		a string or unicode.""" 
+		a string or unicode."""
 		if type(data) == str:
 			return data
 		elif type(data) == unicode:
 			return data
+		elif isinstance(data, wwwclient.browse.Session):
+			return self.html(data.last().data())
+		elif isinstance(data, wwwclient.browse.Transaction):
+			return self.html(data.data())
 		elif isinstance(data, TagList):
 			return data.html()
 		elif isinstance(data, TagTree):
@@ -738,8 +763,18 @@ class HTMLTools:
 		res = None
 		if type(data) in (str, unicode):
 			res = data
-		else:
+		if type(data) in (list, tuple, iter):
+			return [self.text(_) for _ in data]
+		elif isinstance(data, wwwclient.browse.Session):
+			return self.text(data.last().data(), expand, normalize)
+		elif isinstance(data, wwwclient.browse.Transaction):
+			return self.text(data.data(), expand, normalize)
+		elif isinstance(data, Tag):
 			res = data.text()
+		elif isinstance(data, TagTree):
+			res = data.text()
+		else:
+			raise Exception("Unsupported data:" + str(data) + ":" + data.__class__.__name__)
 		if expand: res = self.expand(res)
 		if normalize: res = self.normalize(res)
 		return res
@@ -796,7 +831,7 @@ class HTMLTools:
 	# ========================================================================
 
 	def forms( self, html ):
-		return form.parseForms(self, self.html(html))
+		return wwwclient.form.parseForms(self, self.html(html))
 
 	def images( self, html, like=None ):
 		"""Iterates through the links found in this document. This yields the
