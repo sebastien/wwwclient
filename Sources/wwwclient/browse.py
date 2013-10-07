@@ -54,7 +54,7 @@ def fix(s, charset='utf-8'):
 
 def retry( function, times=5, wait=(0.1, 0.5, 1, 1.5, 2), exception=None):
 	"""Retries the given function at most `times`, waiting wait seconds. If
-	wait is an array, the `wait[0]` will be waited on the first try, 
+	wait is an array, the `wait[0]` will be waited on the first try,
 	`wait[1]` on the second, and so on."""
 	if times <= 0:
 		raise exception
@@ -99,7 +99,7 @@ class Pairs:
 				self.pairs[i] = (name,value)
 		else:
 			self.add(name, value)
-	
+
 	def get( self, name ):
 		"""Gets the pair with the given name (case-insensitive)"""
 		for key, value in self.pairs:
@@ -123,7 +123,7 @@ class Pairs:
 		else:
 			pair = (name,value)
 			if pair not in self.pairs: self.pairs.append((name, value))
-	
+
 	def clear( self, name ):
 		"""Clears all the (name,values) pairs which have the given name."""
 		self.pairs = filter(lambda x:x[0]!= name, self.pairs)
@@ -157,7 +157,7 @@ class Pairs:
 	def asURL( self ):
 		"""Returns an URL-encoded version of this parameters list."""
 		return urllib.urlencode(self.pairs)
-	
+
 	def asFormData( self ):
 		"""Returns an URL-encoded version of this parameters list."""
 		return urllib.urlencode(self.pairs)
@@ -169,7 +169,7 @@ class Pairs:
 	def asCookies( self ):
 		"""Returns these pairs as cookies"""
 		return "; ".join("%s=%s" % (k,v) for k,v in self.pairs)
-	
+
 	def asFields( self ):
 		"""Returns a list of (name, value) couples."""
 		return list(self.pairs)
@@ -201,10 +201,10 @@ class Request:
 	mimetype=client.DEFAULT_MIMETYPE ):
 		"""Creates an internal representation for an attachment, which is either
 		the given filename or the given content, filename and data, as a triple:
-		
+
 		>    (<content name>,   <content value>, CONTENT_ATTACHMENT)
 		>    (<file name from>, <actual file name>, FILE_ATTACHMENT)
-		
+
 		Here 'CONTENT_ATTACHMENT' and 'FILE_ATTACHMENT' are constants from the
 		'wwwclient' module to denote the type of attachment.
 		"""
@@ -255,7 +255,7 @@ class Request:
 		"""Returns the params attached to this request. The params are returned
 		as a 'Pair' instance."""
 		return self._params
-	
+
 	def fields( self ):
 		"""Returns the fields of this request, as a 'Pair' instance (if any).
 		fields are related to form-submission (see also 'data' method)."""
@@ -315,7 +315,7 @@ class Request:
 
 class Transaction:
 	"""A transaction encaspulates a request and its (zero or more) responses.
-	
+
 	Attributes::
 
 	- 'session':  enclosing session
@@ -324,7 +324,7 @@ class Transaction:
 	- 'cookies':  cookies
 	- 'redirect': for the redirection (None by default)
 	- 'done':     if the transaction was executed or not
-	
+
 	"""
 
 	STATUS  = 0
@@ -357,7 +357,7 @@ class Transaction:
 		"""Returns this transaction cookies (including the new cookies, if the
 		transaction is set to merge cookies)"""
 		return self._cookies
-	
+
 	def headers( self ):
 		"""Returns the headers received by the response."""
 		headers = self._responses[-1][self.HEADERS]
@@ -396,9 +396,12 @@ class Transaction:
 		"""Returns the response data (implies that the transaction was
 		previously done)"""
 		return self.body()
-	
+
 	def dataAsJSON( self ):
 		return json.loads(self.data())
+
+	def asJSON( self ):
+		return self.dataAsJSON()
 
 	def redirect( self ):
 		"""Returns the URL to which the response redirected, if any."""
@@ -507,6 +510,7 @@ class Session:
 	REDIRECT_LIMIT   = 5
 	DEFAULT_RETRIES  = [0.25, 0.5, 1.0, 1.5, 2.0]
 	DEFAULT_DELAY    = 1
+	CACHE            = None
 
 	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None, cache=None ):
 		"""Creates a new session at the given host, and for the given
@@ -514,6 +518,7 @@ class Session:
 		Keyword arguments::
 			'delay':  the range of delay between two requests e.g: (1.5, 3)"""
 		self._httpClient      = defaultclient.HTTPClient()
+		cache                 = cache if cache else self.CACHE
 		if cache: self._httpClient.setCache(cache)
 		self._host            = None
 		self._port            = 80
@@ -629,7 +634,7 @@ class Session:
 	def attach( self, name, filename=None, content=None, mimetype=client.DEFAULT_MIMETYPE ):
 		"""Creates an attachment with the given name for the given `filename` or
 		`content` (`mimetype` will be guessed unlesss specified).
-		
+
 		This attachment can be used later by giving it as value for the `attach`
 		parameter of the `post` method."""
 		return Request.makeAttachment( name, filename=filename, content=content,
@@ -641,7 +646,7 @@ class Session:
 		if not overwrite:
 			while os.path.exists(path):
 				base, ext = os.path.splitext(path)
-				i =  base.rfind("-") 
+				i =  base.rfind("-")
 				if i != -1:
 					try: v = int(base[i+1:])
 					except: v = None
@@ -714,7 +719,7 @@ class Session:
 					break
 		return transaction
 
-	
+
 	def post( self, url=None, params=None, data=None, mimetype=None,
 	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None, retry=[], cache=True):
 		"""Posts data to the given URL. The optional `params` (`Pairs`) or `data`
@@ -722,10 +727,10 @@ class Session:
 		(if it is a special kind of data). The `fields` is a `Pairs` instance of
 		values to be encoded within the body. The `attach` may contain some
 		attachements created before using the `attach()` method.
-		
+
 		You should have a look at the `wwwclient.client` module for more
 		information on how the parameters are processed.
-		
+
 		As always, this returns a new `Transaction` instance."""
 		if follow is None: follow = self._follow
 		if do is None: do = self._do
@@ -797,7 +802,7 @@ class Session:
 		method), executed with the given args complies with the `expect`
 		predicate, which will be given his session. You can specify a number of
 		retries (maxed to 10), and a delay (in seconds) before each retry.
-		
+
 		When finished, this function returns True if it suceeded, or False if
 		the retries failed."""
 		retry = retry or self.DEFAULT_RETRIES
@@ -808,6 +813,9 @@ class Session:
 			time.sleep(delay)
 			retry -= 1
 		return res
+
+	def asJSON( self ):
+		return self.last().asJSON()
 
 	def save(self, path, transaction=None):
 		"""Saves the page from the given transaction (default it 'last()') to
@@ -908,7 +916,7 @@ class Personality:
 
 	def __init__( self, agent ):
 		self.agent = agents.pickLatest(agent)
-	
+
 	def userAgent( self ):
 		return self.agent[-1]
 
