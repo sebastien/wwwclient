@@ -111,6 +111,7 @@ class ElementTag(Tag):
 		Tag.__init__(self, html, start, end)
 		if type == None: type = Tag.OPEN
 		self._attributes = attributes
+		# astart-aend denote the range of attributes
 		self.astart      = astart
 		self.aend        = aend
 		self.level       = level
@@ -315,6 +316,10 @@ class TagList:
 			res.append(tag.text(encoding))
 		# FIXME: Unicode
 		return u"".join(res)
+
+	def find( self, expression ):
+		# FIXME: Implement CSS matching
+		return self.withName(expression)
 
 	def withName( self, name ):
 		return [_ for _ in self if _.name() == name]
