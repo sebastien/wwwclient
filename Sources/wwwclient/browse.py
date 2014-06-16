@@ -604,11 +604,28 @@ class Session:
 		assert self.last(), "No transaction available."
 		return self.last().status()
 
-	def url( self ):
+	def url( self, suffix=None ):
 		"""Returns the URL of the last page. This is an alias for
 		`self.last().url()`"""
-		assert self.last(), "No transaction available."
-		return self.last().url()
+		if not suffix:
+			assert self.last(), "No transaction available."
+			return self.last().url()
+		else:
+			if "://" in suffix:
+				return suffix
+			elif suffix[0] == "/":
+				return "{0}{1}".format(self.rootUrl(), suffix)
+			else:
+				return "{0}/{1}".format(self.baseUrl(), suffix)
+
+	def baseUrl( self ):
+		url = self.url()
+		return url.rsplit("/", 1)[0]
+
+	def rootUrl( self ):
+		url   = self.url()
+		proto, path =  url.rsplit("://", 1)
+		return "{0}://{1}".format(proto, path.split("/",1)[0])
 
 	def form( self, name=None ):
 		"""Returns the first form declared in the last transaction response data."""
