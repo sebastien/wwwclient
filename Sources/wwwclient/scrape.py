@@ -45,6 +45,14 @@ KEEP_ABOVE    = "+"
 KEEP_SAME     = "="
 KEEP_BELOW    = "-"
 
+DEFAULT_ENCODING = "UTF-8"
+
+def ensureUnicode( text, encoding=None ):
+	if not isinstance(text, unicode):
+		return text.decode(encoding or DEFAULT_ENCODING)
+	else:
+		return text
+
 # -----------------------------------------------------------------------------
 #
 # URL
@@ -129,9 +137,9 @@ class ElementTag(Tag):
 		else:
 			return self.attributes().get(name) == value
 
-	def get( self, name ):
+	def get( self, name, default=None ):
 		"""Returns the given attribute set for this tag."""
-		return self.attributes().get(name)
+		return self.attributes().get(name) or default
 
 	def name( self ):
 		"""Returns this tag name"""
@@ -313,7 +321,7 @@ class TagList:
 	def text(self, encoding=None):
 		res = []
 		for tag in self.content:
-			res.append(tag.text(encoding))
+			res.append(ensureUnicode(tag.text(encoding), encoding))
 		# FIXME: Unicode
 		return u"".join(res)
 
@@ -379,11 +387,11 @@ class TagTree:
 		if self.startTag == None: return None
 		return self.startTag.has(name, value)
 
-	def get( self, name):
+	def get( self, name, default=None):
 		"""Gets the start tag of this tag tree attribute with the given
 		'name'"""
-		if self.startTag == None: return None
-		return self.startTag.get(name)
+		if self.startTag == None: return default
+		return self.startTag.get(name) or default
 
 	def attribute(self, name):
 		"""Alias for 'get(name)"""
