@@ -30,7 +30,7 @@ document. This is very useful, as it does not require the HTML to be
 well-formed, and allows easy selection of HTML fragments."""
 
 RE_SPACES    = re.compile("\s+")
-RE_HTMLSTART = re.compile("</?((\w+:)?\w+)",      re.I)
+RE_HTMLSTART = re.compile("</?((\w+[\d\w_\-]*:)?[\d\w_\-]+)",      re.I)
 RE_HTMLEND   = re.compile("/?>")
 RE_HTMLLINK  = re.compile("<[^<]+(href|src|url)\s*=\s*('[^']*'|\"[^\"]*\"|[^ >]*)", re.I)
 
@@ -362,6 +362,9 @@ class TagTree:
 		self.open(startTag)
 		self.close(endTag)
 
+	def isText( self ):
+		return self.name == "#text"
+
 	def clone( self, children=None ):
 		"""Clones this tree. If the 'children' attribute is 'True', then the
 		children will be cloned as well (deep clone)."""
@@ -616,6 +619,9 @@ class TagTree:
 	def __repr__( self ):
 		return str(self.list())
 
+	def __len__( self ):
+		return len(self.children)
+
 	def html( self ):
 		"""Converts this tags tree to HTML"""
 		return self.list().html()
@@ -626,6 +632,12 @@ class TagTree:
 
 	def innerhtml( self ):
 		return self.list().innerhtml()
+
+	def __getitem__( self, index ):
+		if isinstance(index, str):
+			return self.get(index)
+		else:
+			return self.children[index]
 
 	def __iter__( self ):
 		for tag in self.list():
