@@ -46,7 +46,7 @@ setup(
     license     = LICENSE,
     keywords    = KEYWORDS,
     url         = "http://github.com/sebastien/%s" % (PROJECT.lower()),
-    download_url= "http://github.com/sebastien/%s/tarball/%" % (PROJECT.lower(),PROJECT.lower(),VERSION) ,
+    download_url= "http://github.com/sebastien/%s/tarball/%s" % (PROJECT.lower(),VERSION) ,
     package_dir = { "": "Sources" },
     packages    = [PROJECT.lower()],
     classifiers = [
