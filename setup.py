@@ -18,7 +18,7 @@ except ImportError:
     from distutils.core import setup
 
 PROJECT     = "wwwclient"
-LICENSE     = "Lesser GNU General Public License"
+LICENSE     = "License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)"
 VERSION = eval(filter(lambda _:_.startswith("__version__"), file("Sources/wwwclient/__init__.py").readlines())[0].split("=")[1])
 SUMMARY     = "Advanced Web Browsing, Scraping And Automation"
 DESCRIPTION = """\
@@ -55,7 +55,6 @@ setup(
       "Environment :: Web Environment",
       "Intended Audience :: Developers",
       "Intended Audience :: Information Technology",
-      "License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)"
       "Natural Language :: English",
       "Topic :: Internet :: WWW/HTTP",
       "Operating System :: POSIX",
