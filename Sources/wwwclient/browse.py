@@ -732,10 +732,10 @@ class Session:
 				if not (redirect_url in visited):
 					visited.append(redirect_url)
 					transaction = self.get(redirect_url, headers=headers, cookies=cookies, do=True, method=method, follow=False)
+					iteration  += 1
 				else:
 					break
 		return transaction
-
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
 	fields=None, attach=None, headers=None, follow=None, do=None, cookies=None, retry=[], cache=True):
