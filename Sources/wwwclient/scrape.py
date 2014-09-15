@@ -86,6 +86,7 @@ class URL:
 class Tag:
 	"""A Tag is an abstract decorator for a portion within a string. Tags are
 	used in this module to identify HTML/XML data within strings."""
+
 	OPEN  = "open"
 	CLOSE = "close"
 	EMPTY = "empty"
@@ -104,6 +105,9 @@ class Tag:
 
 	def html( self ):
 		"""Returns the HTML representation of this tag."""
+		return self._html[self.start:self.end]
+
+	def __str__( self ):
 		return self._html[self.start:self.end]
 
 	def __repr__( self ):
@@ -140,6 +144,11 @@ class ElementTag(Tag):
 	def get( self, name, default=None ):
 		"""Returns the given attribute set for this tag."""
 		return self.attributes().get(name) or default
+
+	def set( self, name, value=None ):
+		"""Sets the given attribute set for this tag."""
+		self.attributes()[name] = value
+		return self
 
 	def name( self ):
 		"""Returns this tag name"""
@@ -245,7 +254,7 @@ class TagList:
 					self.append(TextTag(html, start=offset,end=tag_start))
 				# We process the encountered tag
 				#new  = level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
-				new = ElementTag( html, tag_start, attr_end + 1, attr_start, attr_end, type=tag_type, level=level)
+				new = ElementTag( html, tag_start, tag_end_offset, attr_start, attr_end, type=tag_type, level=level)
 				self.append(new)
 				last = new
 				offset = tag_end_offset
@@ -335,6 +344,12 @@ class TagList:
 	def __iter__( self ):
 		for tag in self.content:
 			yield tag
+
+	def __len__(self):
+		return len(self.content)
+
+	def __getitem__(self, i):
+		return self.content[i]
 
 	def __str__( self ):
 		return str(self.content)

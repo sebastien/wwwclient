@@ -65,7 +65,7 @@ def retry( function, times=5, wait=(0.1, 0.5, 1, 1.5, 2), exception=None):
 		delay = wait
 	try:
 		return function()
-	except Exception, e:
+	except Exception as e:
 		time.sleep(delay)
 		return retry(function, times - 1, wait, e)
 
@@ -340,6 +340,7 @@ class Transaction:
 		self._newCookies = None
 		self._done       = False
 		self._responses  = []
+		self._failure    = None
 
 	def session( self ):
 		"""Returns this transaction session"""
@@ -352,6 +353,10 @@ class Transaction:
 	def status( self ):
 		"""Returns the session status"""
 		return self._status
+
+	def fail( self, exception ):
+		self._failure = exception
+		return self
 
 	def cookies( self ):
 		"""Returns this transaction cookies (including the new cookies, if the
@@ -512,7 +517,7 @@ class Session:
 	DEFAULT_DELAY    = 1
 	CACHE            = None
 
-	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None, cache=None ):
+	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None, cache=None, exceptions=True ):
 		"""Creates a new session at the given host, and for the given
 		protocol.
 		Keyword arguments::
@@ -534,6 +539,7 @@ class Session:
 		self._do              = do
 		self._delay           = delay
 		self._headers         = []
+		self._throwExceptions = True
 		if type(personality) in (unicode,str): personality = Personality.Get(personality)
 		self._personality     = personality
 		self.MERGE_COOKIES    = True
@@ -597,6 +603,13 @@ class Session:
 		`self.last().data()`."""
 		assert self.last(), "No transaction available."
 		return self.last().data()
+
+	def asJSON( self ):
+		assert self.last(), "No transaction available."
+		return self.last().asJSON()
+
+	def asTree( self ):
+		return HTML.tree(self.page())
 
 	def status( self ):
 		"""Returns the status of the last transaction. This is an alias for
@@ -719,9 +732,9 @@ class Session:
 				try:
 					transaction.do()
 					break
-				except httplib.IncompleteRead, e:
+				except httplib.IncompleteRead as e:
 					if i >= len(retry):
-						raise e
+						return self._failTransaction(transaction, e)
 					else:
 						time.sleep(r)
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
@@ -735,6 +748,12 @@ class Session:
 					iteration  += 1
 				else:
 					break
+		return transaction
+
+	def _failTransaction( self, transaction, exception ):
+		transaction.fail(exception)
+		if self._throwExceptions:
+			raise exception
 		return transaction
 
 	def post( self, url=None, params=None, data=None, mimetype=None,
@@ -770,7 +789,7 @@ class Session:
 				try:
 					transaction.do()
 					break
-				except httplib.IncompleteRead, e:
+				except httplib.IncompleteRead as e:
 					if i >= len(retry):
 						raise e
 					else:
