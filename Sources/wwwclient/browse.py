@@ -9,7 +9,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 04-Mar-2013
+# Last mod  : 26-Sep-2014
 # -----------------------------------------------------------------------------
 
 # TODO: Allow Request to have parameters in body or url and attachments as well
@@ -732,11 +732,15 @@ class Session:
 				try:
 					transaction.do()
 					break
-				except httplib.IncompleteRead as e:
-					if i >= len(retry):
-						return self._failTransaction(transaction, e)
+				except Exception as e:
+					if isinstance(e, httplib.IncompleteRead) or isinstance(e, socket.timeout):
+						# We retry only on socket timeout or incomplete read
+						if i >= len(retry):
+							return self._failTransaction(transaction, e)
+						else:
+							time.sleep(r)
 					else:
-						time.sleep(r)
+						return self._failTransaction(transaction, e)
 			if self.MERGE_COOKIES: self._cookies.merge(transaction.newCookies())
 			visited   = [url]
 			iteration = 0

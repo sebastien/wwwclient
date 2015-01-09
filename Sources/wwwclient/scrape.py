@@ -22,7 +22,6 @@ import re, string, htmlentitydefs
 import wwwclient.form
 import wwwclient.browse
 
-
 __doc__ = """\
 The scraping module gives a set of functionalities to manipulate HTML data. All
 functions are text oriented, so that they work with any subset of an HTML

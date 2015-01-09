@@ -1,0 +1,24 @@
+Recover from timeouts
+Traceback (most recent call last):
+  File "collect.py", line 4, in <module>
+    CollectData("visualizeus.images", "http://vi.sualize.us/sebastien/").run()
+  File "/home/sebastien/Projects/Private/FF-Collector/Sources/collector/operations.py", line 88, in run
+    result    = source(*datum_args) 
+  File "/home/sebastien/Projects/Private/FF-Collector/Sources/collector/channels/visualizeus.py", line 38, in getArticles
+    article         = self._getArticle(article_url, session)
+  File "/home/sebastien/Projects/Private/FF-Collector/Sources/collector/channels/visualizeus.py", line 45, in _getArticle
+    page = session.get(url)
+  File "/home/sebastien/Projects/Local/lib/python/wwwclient/browse.py", line 653, in get
+    transaction.do()
+  File "/home/sebastien/Projects/Local/lib/python/wwwclient/browse.py", line 406, in do
+    headers=request.headers().asHeaders()
+  File "/home/sebastien/Projects/Local/lib/python/wwwclient/defaultclient.py", line 29, in GET
+    return self._request(url, headers, "GET")
+  File "/home/sebastien/Projects/Local/lib/python/wwwclient/defaultclient.py", line 57, in _request
+    response = self._performRequest()
+  File "/home/sebastien/Projects/Local/lib/python/wwwclient/defaultclient.py", line 137, in _performRequest
+    raise e
+socket.timeout: timed out
+
+- Build a collection of reliable (test on Facebook) user agent strings
+- Add GZip/deflate support

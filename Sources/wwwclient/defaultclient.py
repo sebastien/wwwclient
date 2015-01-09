@@ -134,7 +134,7 @@ class HTTPClient(client.HTTPClient):
 			res += response.read()
 			self._closeConnection()
 			return res
-		except Exception, e:
+		except Exception as e:
 			self._closeConnection()
 			raise e
 
