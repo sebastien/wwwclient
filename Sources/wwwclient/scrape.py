@@ -90,12 +90,12 @@ class Tag:
 	CLOSE = "close"
 	EMPTY = "empty"
 
-	def __init__( self, html, start, end, depth=depth ):
+	def __init__( self, html, start, end, depth=0 ):
 		"""Creates a new new tag."""
 		self._html  = html
 		self.start  = start
 		self.end    = end
-		self.depth  = 0
+		self.depth  = depth
 
 	def isElement( self ):
 		return isinstance(self, ElementTag)
@@ -126,7 +126,7 @@ class ElementTag(Tag):
 	def __init__( self, html, start, end, astart=None, aend=None, attributes=None,
 	depth=None, type=None ):
 		"""Creates a new tag element extracted from the given 'html' string."""
-		Tag.__init__(self, html, start, end, depth=level)
+		Tag.__init__(self, html, start, end, depth=depth)
 		if type == None: type = Tag.OPEN
 		self._attributes = attributes
 		# astart-aend denote the range of attributes
@@ -213,8 +213,8 @@ class ElementTag(Tag):
 class TextTag(Tag):
 	"""Represents raw text, not an element."""
 
-	def __init__( self, html, start, end):
-		Tag.__init__(self, html, start, end)
+	def __init__( self, html, start, end, depth=0):
+		Tag.__init__(self, html, start, end, depth)
 
 	def hasName( self, name ):
 		return False
@@ -277,10 +277,10 @@ class TagList:
 				tag_type, tag_name, tag_start, attr_start, attr_end = tag
 				# There may be text inbetween
 				if tag_start > offset:
-					self.append(TextTag(html, start=offset,end=tag_start, depth=level))
+					self.append(TextTag(html, start=offset,end=tag_start, depth=depth))
 				# We process the encountered tag
 				#new  = depth, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
-				new = ElementTag( html, tag_start, tag_end_offset, attr_start, attr_end, type=tag_type, depth=level)
+				new = ElementTag( html, tag_start, tag_end_offset, attr_start, attr_end, type=tag_type, depth=depth)
 				self.append(new)
 				last = new
 				offset = tag_end_offset
