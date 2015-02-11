@@ -8,7 +8,7 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 19-Jun-2006
-# Last mod  : 25-Aug-2013
+# Last mod  : 11-Feb-2014
 # -----------------------------------------------------------------------------
 
 # TODO: The tree could be created by the iterate function, by directly linking
@@ -90,11 +90,12 @@ class Tag:
 	CLOSE = "close"
 	EMPTY = "empty"
 
-	def __init__( self, html, start, end ):
+	def __init__( self, html, start, end, depth=depth ):
 		"""Creates a new new tag."""
 		self._html  = html
 		self.start  = start
 		self.end    = end
+		self.depth  = 0
 
 	def isElement( self ):
 		return isinstance(self, ElementTag)
@@ -107,26 +108,40 @@ class Tag:
 		return self._html[self.start:self.end]
 
 	def __str__( self ):
-		return self._html[self.start:self.end]
+		return self.html()
 
 	def __repr__( self ):
-		return repr(self._html[self.start:self.end])
+		return repr(self.html())
+
+# -----------------------------------------------------------------------------
+#
+# ELEMENTS
+#
+# -----------------------------------------------------------------------------
 
 class ElementTag(Tag):
 	"""Represents a single element tag (open or close) identified within
 	a string."""
 
 	def __init__( self, html, start, end, astart=None, aend=None, attributes=None,
-	level=None, type=None ):
+	depth=None, type=None ):
 		"""Creates a new tag element extracted from the given 'html' string."""
-		Tag.__init__(self, html, start, end)
+		Tag.__init__(self, html, start, end, depth=level)
 		if type == None: type = Tag.OPEN
 		self._attributes = attributes
 		# astart-aend denote the range of attributes
 		self.astart      = astart
 		self.aend        = aend
-		self.level       = level
 		self.type        = type
+
+	def isClosing( self ):
+		return self.type == Tag.CLOSE
+
+	def isOpen( self ):
+		return self.type == Tag.OPEN
+
+	def isEmpty( self ):
+		return self.type == Tag.EMPTY
 
 	def attributes( self ):
 		if self._attributes == None:
@@ -189,6 +204,12 @@ class ElementTag(Tag):
 	def __getitem__( self, name ):
 		return self.get(name)
 
+# -----------------------------------------------------------------------------
+#
+# TEXT
+#
+# -----------------------------------------------------------------------------
+
 class TextTag(Tag):
 	"""Represents raw text, not an element."""
 
@@ -214,6 +235,12 @@ class TextTag(Tag):
 	def name(self):
 		return "#text"
 
+# -----------------------------------------------------------------------------
+#
+# TAG LIST
+#
+# -----------------------------------------------------------------------------
+
 class TagList:
 	"""Represents a list of ElementTag and TextTag, which basically corresponds
 	to the tokenization of an HTML string. The list can be folded as a tree
@@ -236,7 +263,7 @@ class TagList:
 		erase the content of this tag list, replacing it by this one."""
 		self.content = []
 		offset    = 0
-		level     = 0
+		depth     = 0
 		end       = False
 		if scraper == None: scraper = HTML
 		while not end:
@@ -250,10 +277,10 @@ class TagList:
 				tag_type, tag_name, tag_start, attr_start, attr_end = tag
 				# There may be text inbetween
 				if tag_start > offset:
-					self.append(TextTag(html, start=offset,end=tag_start))
+					self.append(TextTag(html, start=offset,end=tag_start, depth=level))
 				# We process the encountered tag
-				#new  = level, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
-				new = ElementTag( html, tag_start, tag_end_offset, attr_start, attr_end, type=tag_type, level=level)
+				#new  = depth, tag_type, tag_name, tag_start, attr_end + 1, attr_start, attr_end
+				new = ElementTag( html, tag_start, tag_end_offset, attr_start, attr_end, type=tag_type, depth=level)
 				self.append(new)
 				last = new
 				offset = tag_end_offset
@@ -296,12 +323,12 @@ class TagList:
 						tags_stack.append(tag)
 						counter   += 1
 				elif tag.type == Tag.CLOSE:
-					opening_tag, level = find_opening_tag(tag, tags_stack)
+					opening_tag, depth = find_opening_tag(tag, tags_stack)
 					if not opening_tag:
 						#print "WARNING: no opening tag for ", tag
 						continue
 					else:
-						while len(tags_stack) > level:
+						while len(tags_stack) > depth:
 							stack_tag = tags_stack.pop()
 							node      = parents.pop()
 						assert stack_tag == opening_tag
@@ -353,7 +380,13 @@ class TagList:
 	def __str__( self ):
 		return str(self.content)
 
+# -----------------------------------------------------------------------------
+#
+# TAG TREE
+#
+# -----------------------------------------------------------------------------
 # FIXME: Should inherit from TagNode
+
 class TagTree:
 	"""A tag tree wraps one or two tags and allows to structure tags as a tree.
 	The tree node instance offers a nice interface to manipulate the HTML
