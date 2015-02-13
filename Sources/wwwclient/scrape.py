@@ -103,6 +103,15 @@ class Tag:
 	def isText( self ):
 		return isinstance(self, TextTag)
 
+	def isClosing( self, tag=None ):
+		return False
+
+	def isOpen( self ):
+		return False
+
+	def isEmpty( self ):
+		return False
+
 	def html( self ):
 		"""Returns the HTML representation of this tag."""
 		return self._html[self.start:self.end]
@@ -134,8 +143,8 @@ class ElementTag(Tag):
 		self.aend        = aend
 		self.type        = type
 
-	def isClosing( self ):
-		return self.type == Tag.CLOSE
+	def isClosing( self, tag=None ):
+		return self.type == Tag.CLOSE and (True if tag is None else self.name() == tag.name())
 
 	def isOpen( self ):
 		return self.type == Tag.OPEN
@@ -151,7 +160,7 @@ class ElementTag(Tag):
 	def has( self, name, value=None ):
 		"""Tells if this tag has the given attribute"""
 		if value is None:
-			return self.attributes().has_key(name)
+			return name in self.attributes()
 		else:
 			return self.attributes().get(name) == value
 
