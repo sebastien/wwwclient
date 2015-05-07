@@ -16,7 +16,7 @@
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib, base64, socket
+import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib, base64, socket, tempfile, webbrowser
 from   wwwclient import client, defaultclient, scrape, agents
 
 HTTP               = "http"
@@ -141,7 +141,12 @@ class Pairs:
 					self.add(name, value)
 				elif type(v) in (str, unicode):
 					if v:
-						name, value = v.split(":", 1)
+						name_value = v.split(":", 1)
+						value      = None
+						if len(name_value) == 1:
+							name = name_value
+						else:
+							name, value = name_value
 						self.add(name.strip(), value.strip())
 				else:
 					raise Exception("Pair.merge: Unsupported type for merging %s" % (parameters))
@@ -362,6 +367,12 @@ class Transaction:
 		"""Returns this transaction cookies (including the new cookies, if the
 		transaction is set to merge cookies)"""
 		return self._cookies
+
+	def header( self, name ):
+		return self.headers().get(name)
+
+	def rawHeaders( self ):
+		return self._responses[-1][self.HEADERS]
 
 	def headers( self ):
 		"""Returns the headers received by the response."""
@@ -865,6 +876,17 @@ class Session:
 		f = file(path,'w')
 		f.write(d)
 		f.close()
+
+	def preview( self, transaction=None ):
+		"""Opens a web browser to preview the request."""
+		if transaction is None: transaction = self.last()
+		ext  = transaction.headers().get("ContentType") or "text/html"
+		ext  = ext.strip().split(";",1)[0].split("/")[-1]
+		path = tempfile.mktemp(prefix="wwwclient-", suffix="."+ext)
+		self.save(path, transaction)
+		webbrowser.open("file://" + path)
+		time.sleep(5)
+		os.unlink(path)
 
 	def __processURL( self, url, store=True ):
 		"""Processes the given URL, by storing the host and protocol, and
