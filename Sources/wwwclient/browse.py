@@ -19,17 +19,18 @@
 import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib, base64, socket, tempfile, webbrowser
 from   wwwclient import client, defaultclient, scrape, agents
 
-HTTP               = "http"
-HTTPS              = "https"
-PROTOCOLS          = (HTTP, HTTPS)
+HTTP                = "http"
+HTTPS               = "https"
+PROTOCOLS           = (HTTP, HTTPS)
 
-GET                = "GET"
-POST               = "POST"
-HEAD               = "HEAD"
-METHODS            = (GET, POST, HEAD)
+GET                 = "GET"
+POST                = "POST"
+HEAD                = "HEAD"
+METHODS             = (GET, POST, HEAD)
+DEFAULT_HTTP_CLIENT =  defaultclient.HTTPClient
 
-FILE_ATTACHMENT    = client.FILE_ATTACHMENT
-CONTENT_ATTACHMENT = client.CONTENT_ATTACHMENT
+FILE_ATTACHMENT     = client.FILE_ATTACHMENT
+CONTENT_ATTACHMENT  = client.CONTENT_ATTACHMENT
 
 def quote(path):
 	return urllib.quote(path, '/%')
@@ -528,12 +529,12 @@ class Session:
 	DEFAULT_DELAY    = 1
 	CACHE            = None
 
-	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None, cache=None, exceptions=True ):
+	def __init__( self, url=None, verbose=0, personality="random", follow=True, do=True, delay=None, cache=None, exceptions=True, client=None ):
 		"""Creates a new session at the given host, and for the given
 		protocol.
 		Keyword arguments::
 			'delay':  the range of delay between two requests e.g: (1.5, 3)"""
-		self._httpClient      = defaultclient.HTTPClient()
+		self._httpClient      = (client or DEFAULT_HTTP_CLIENT)()
 		cache                 = cache if cache else self.CACHE
 		if cache: self._httpClient.setCache(cache)
 		self._host            = None

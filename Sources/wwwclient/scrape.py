@@ -96,6 +96,7 @@ class Tag:
 		self.start  = start
 		self.end    = end
 		self.depth  = depth
+		self.children = ()
 
 	def isElement( self ):
 		return isinstance(self, ElementTag)
@@ -112,15 +113,28 @@ class Tag:
 	def isEmpty( self ):
 		return False
 
+	def text( self ):
+		"""Returns only the text tags in this HTML tree"""
+		return self._html[self.start:self.end] if self._html else ""
+
+	def get( self, name ):
+		return None
+
 	def html( self ):
 		"""Returns the HTML representation of this tag."""
-		return self._html[self.start:self.end]
+		return self._html[self.start:self.end] if self._html else ""
 
 	def __str__( self ):
 		return self.html()
 
 	def __repr__( self ):
 		return repr(self.html())
+
+	def __iter__( self ):
+		while True:
+			yield None
+			break
+
 
 # -----------------------------------------------------------------------------
 #
@@ -669,6 +683,10 @@ class TagTree:
 		else:
 			return [self]
 
+	def first( self, query ):
+		r = self.query(query)
+		return r[0] if len(r) > 0 else HTML.EMPTY
+
 	def __str__( self ):
 		return self.prettyString()
 
@@ -746,6 +764,8 @@ class HTMLTools:
 	document."""
 
 	LEVEL_ACCOUNT = [ "html", "head", "body", "div", "table", "tr", "td" ]
+
+	EMPTY = Tag(None,0,0,0)
 
 	def __init__( self ):
 		pass
