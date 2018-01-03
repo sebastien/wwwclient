@@ -27,7 +27,7 @@ class Form:
 	"""A simple interface to forms, returned by the scraper. Forms can be easily
 	filled and their values (@values) can be given as parameters to the @browse
 	module.
-	
+
 	A form has:
 
 	- a _single action_
@@ -36,14 +36,14 @@ class Form:
 	  set to the actual element type.
 	- a _list of values_ which will be associated with values when filling the
 	  form.
-	
+
 	Form values are cleanly separated from their inputs, so that you can simply
 	clear the values to resubmit the form.
 	"""
 
 # TODO: Add STRICT mode for form that checks possible values/action/field names
 
-	def __init__( self, name, action=None ):
+	def __init__( self, name=None, action=None ):
 		self.name    = name
 		self.action  = action
 		self.inputs  = []
@@ -84,7 +84,7 @@ class Form:
 			if field_name == name:
 				return field
 		return None
-	
+
 	def actions( self, namelike=None, namesOnly=False ):
 		"""Returns the list of inputs (or input names if namesOnly is True) that
 		correspond to form action buttons."""
@@ -108,7 +108,7 @@ class Form:
 			# FIXME: Check that the name exists in the form
 			self.values[name] = value
 		return self
-	
+
 	def set( self, name, value ):
 		"""Sets the given form value. This modified the values within the form,
 		and not the fields directly."""
@@ -147,13 +147,13 @@ class Form:
 				res.append((key, value))
 		return res
 
-	def submit( self, action=None, encoding="latin-1", strip=True, **values ):
+	def submit( self, action=None, encoding="utf-8", strip=True, **values ):
 		"""Submits this form with the given action and given values. This
 		basically takes all the default values set within this form, replacing
 		them with the set or given values (given as keywords), and returns a list of
 		(key, value) pairs that represent the parameters that should be encoded
 		in the response.
-		
+
 		In this repsect, the submit method does not do the actual submission,
 		but rather prepares the data for submission.
 
@@ -191,7 +191,7 @@ class Form:
 			name  = inp.get("name")
 			value = inp.get("value")
 			if name and value: self.values[name] = value
-	
+
 	def asText( self ):
 		"""Returns a pretty-printed text representation of this form. This
 		representation is very useful when it comes to analysing web pages."""
@@ -237,7 +237,7 @@ def parseForms( scraper, html ):
 	inputs outside of forms (this happens sometime). This function is very
 	fast, because it only uses regexes to search for tags within the
 	document, so there is no need to parse the HTML.
-	
+
 	Currently form inputs, select and option are supported.
 	"""
 	if not html: raise Exception("No data")

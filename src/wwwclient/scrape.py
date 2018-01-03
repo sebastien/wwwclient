@@ -18,9 +18,16 @@
 
 # FIXME: This does not support CDATA and PI nodes
 
-import re, string, htmlentitydefs
+import re, string, sys
 import wwwclient.form
 import wwwclient.browse
+
+if sys.version_info.major < 3:
+	import htmlentitydefs as html_entities
+else:
+	import html
+	html_entities = html.entities
+	unicode       = str
 
 __doc__ = """\
 The scraping module gives a set of functionalities to manipulate HTML data. All
@@ -58,7 +65,7 @@ def ensureUnicode( text, encoding=None ):
 #
 # -----------------------------------------------------------------------------
 
-class URL:
+class URL(object):
 
 	@classmethod
 	def Base( self, url ):
@@ -82,7 +89,7 @@ class URL:
 #
 # -----------------------------------------------------------------------------
 
-class Tag:
+class Tag(object):
 	"""A Tag is an abstract decorator for a portion within a string. Tags are
 	used in this module to identify HTML/XML data within strings."""
 
@@ -97,6 +104,7 @@ class Tag:
 		self.end    = end
 		self.depth  = depth
 		self.children = ()
+		self.hasChanged = False
 
 	def isElement( self ):
 		return isinstance(self, ElementTag)
@@ -185,6 +193,14 @@ class ElementTag(Tag):
 	def set( self, name, value=None ):
 		"""Sets the given attribute set for this tag."""
 		self.attributes()[name] = value
+		self.hasChanged = True
+		return self
+
+	def remove( self, name ):
+		a = self.attributes()
+		if name in a:
+			del a[name]
+		self.hasChanged = True
 		return self
 
 	def name( self ):
@@ -220,6 +236,18 @@ class ElementTag(Tag):
 	def hasId( self, name ):
 		"""Tells if the element has the given id (case sensitive)"""
 		return self.attributes().get("id") == name
+
+	def html(self, encoding=None):
+		if self.hasChanged:
+			name = self.name()
+			attr = "".join([" {0}=\"{1}\"".format(k, v) for k,v in self.attributes().items()])
+			return "<{2}{0}{1}{3}>".format(name, attr,
+				"/" if self.isClosing() else "",
+				"/" if self.isEmpty()   else "",
+			)
+
+		else:
+			return super(ElementTag, self).html()
 
 	def text(self, encoding=None):
 		return u''
@@ -466,6 +494,14 @@ class TagTree:
 		if self.startTag == None: return default
 		return self.startTag.get(name) or default
 
+	def set( self, name, value):
+		self.startTag.set(name, value)
+		return self
+
+	def remove( self, name):
+		self.startTag.remove(name)
+		return self
+
 	def attribute(self, name):
 		"""Alias for 'get(name)"""
 		return self.attributes().get(name)
@@ -645,9 +681,9 @@ class TagTree:
 	def query( self, query ):
 		"""Does a basic CSS-like query on the TagTree. Returns a TagTree"""
 		if type(query) not in (tuple, list):
-			selectors = filter(lambda _:_.strip(), query.split(" "))
+			selectors = list(filter(lambda _:_.strip(), query.split(" ")))
 		else:
-			selectors = filter(lambda _:_.strip(), query)
+			selectors = list(filter(lambda _:_.strip(), query))
 		if selectors:
 			head      = selectors[0]
 			tail      = []
@@ -900,7 +936,7 @@ class HTMLTools:
 				else:
 					entity = text[entityStart:entityEnd+1]
 					if len(entity) < 4 or entity[1] != '#':
-						entity = htmlentitydefs.entitydefs.get(entity[1:-1],entity)
+						entity = html_entities.entitydefs.get(entity[1:-1],entity)
 					if len(entity) == 1:
 						if preferUnicodeToISO8859 and ord(entity) > 127 and hasattr(entity, 'decode'):
 							entity = entity.decode('iso-8859-1')
@@ -1043,13 +1079,13 @@ class HTMLTools:
 				value = text[eq+1:]
 				if value and value[0] in ("'", '"'): value = value[1:-1]
 				else: value = value.strip()
-				attribs[name.lower()] = value
+				attribs[name] = value
 				return attribs
 			else:
 				value = text[eq+1:end+1]
 				if value[0] in ("'", '"'): value = value[1:-1]
 				else: value = value.strip()
-				attribs[name.lower()] = value
+				attribs[name] = value
 				return HTML.parseAttributes(text[end+1:].strip(), attribs)
 
 # We create a shared instance with the scraping tools

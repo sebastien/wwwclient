@@ -16,8 +16,17 @@
 # TODO: Add   sessoin.status, session.headers, session.links(), session.scrape()
 # TODO: Add   session.select() to select a form before submit
 
-import urlparse, urllib, mimetypes, re, os, sys, time, json, random, hashlib, httplib, base64, socket, tempfile, webbrowser
+import mimetypes, re, os, sys, time, json, random, hashlib, base64, socket, tempfile, webbrowser
 from   wwwclient import client, defaultclient, scrape, agents
+
+if sys.version_info.major < 3:
+	import urlparse, urllib
+	import httplib as http_client
+	url_quote = urllib.quote
+else:
+	import urllib.parse as urlparse
+	import http.client as http_client
+	url_quote = urlparse.quote
 
 HTTP                = "http"
 HTTPS               = "https"
@@ -33,7 +42,7 @@ FILE_ATTACHMENT     = client.FILE_ATTACHMENT
 CONTENT_ATTACHMENT  = client.CONTENT_ATTACHMENT
 
 def quote(path):
-	return urllib.quote(path, '/%')
+	return url_quote(path, '/%')
 
 def fix(s, charset='utf-8'):
 	"""Sometimes you get an URL by a user that just isn't a real
@@ -745,7 +754,7 @@ class Session:
 					transaction.do()
 					break
 				except Exception as e:
-					if isinstance(e, httplib.IncompleteRead) or isinstance(e, socket.timeout):
+					if isinstance(e, http.client.IncompleteRead) or isinstance(e, socket.timeout):
 						# We retry only on socket timeout or incomplete read
 						if i >= len(retry):
 							return self._failTransaction(transaction, e)
@@ -805,7 +814,7 @@ class Session:
 				try:
 					transaction.do()
 					break
-				except httplib.IncompleteRead as e:
+				except http.client.IncompleteRead as e:
 					if i >= len(retry):
 						raise e
 					else:
@@ -836,7 +845,7 @@ class Session:
 		if type(form) in (unicode, str):
 			forms = scrape.HTML.forms(self.last().data())
 			if not forms.has_key(form):
-				raise SessionException("Form not available: " + form)
+				raise SessionException("Form {0} not found, available forms are: {1}".format(form, forms.keys()))
 			form = forms[form]
 		url    = form.action or self.referer()
 		fields = form.submit(action=action, strip=strip, **values)
@@ -894,6 +903,7 @@ class Session:
 		returning a normalized, absolute URL"""
 		# FIXME: Should infer the URL based on the current URL
 		old_url = url
+		if url.startswith("//"): url = "http:" + url
 		if url == None and not self._transactions: url = "/"
 		if url == None and self._transactions: url = self.last().request.url()
 		proto_rest = url.split("://",1)

@@ -19,7 +19,7 @@ except ImportError:
 
 PROJECT     = "wwwclient"
 LICENSE     = "License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)"
-VERSION = eval(filter(lambda _:_.startswith("__version__"), file("Sources/wwwclient/__init__.py").readlines())[0].split("=")[1])
+VERSION = eval(filter(lambda _:_.startswith("__version__"), file("src/wwwclient/__init__.py").readlines())[0].split("=")[1])
 SUMMARY     = "Advanced Web Browsing, Scraping And Automation"
 DESCRIPTION = """\
 WWWClient is a web browsing, scraping and automation client and library that can
@@ -47,7 +47,7 @@ setup(
     keywords    = KEYWORDS,
     url         = "http://github.com/sebastien/%s" % (PROJECT.lower()),
     download_url= "http://github.com/sebastien/%s/tarball/%s" % (PROJECT.lower(),VERSION) ,
-    package_dir = { "": "Sources" },
+    package_dir = { "": "src" },
     packages    = [PROJECT.lower()],
     classifiers = [
       # See <http://pypi.python.org/pypi?:action=list_classifiers>

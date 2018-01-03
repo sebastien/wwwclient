@@ -9,10 +9,10 @@
 # Credits   : Xprima.com
 # -----------------------------------------------------------------------------
 # Creation  : 04-Jun-2006
-# Last mod  : 27-Sep-2006
+# Last mod  : 17-Apr-2017
 # -----------------------------------------------------------------------------
 
-import re, mimetypes, urllib, zlib
+import os, re, mimetypes, urllib, zlib, gzip, tempfile
 
 __doc__ = """\
 This modules defines an abstract class for HTTP clients, that creates a simple,
@@ -78,12 +78,12 @@ class HTTPClient:
 		if self._onLog:
 			self._onLog(*args)
 		else:
-			print " ".join(map(str,args))
+			sys.stdout.write(" ".join(map(str,args)))
 
 	def setCache( self, cache ):
 		"""Set a cache"""
 		self._cache = cache
-	
+
 	def method( self ):
 		"""Returns the method of the last request by this HTTP client."""
 		return self._method
@@ -91,11 +91,11 @@ class HTTPClient:
 	def url( self ):
 		"""Returns the last URL processed by this HTTP client."""
 		return self._url
-	
+
 	def host( self ):
 		"""Returns the current host"""
 		return self._host
-	
+
 	def protocol( self ):
 		"""Returns the current protocol."""
 		return self._protocol
@@ -103,7 +103,7 @@ class HTTPClient:
 	def status( self ):
 		"""Returns the last response status."""
 		return self._status
-	
+
 	def redirect( self ):
 		"""Returns the redirection URL (if any)."""
 		if self._redirect == None or self._redirect.find("://") != -1:
@@ -112,11 +112,11 @@ class HTTPClient:
 			return "%s://%s%s" % (self.protocol(), self.host(), self._redirect)
 		else:
 			return "%s://%s/%s" % (self.protocol(), self.host(), self._redirect)
-	
+
 	def newCookies( self ):
 		"""Returns the cookies added by the last response."""
 		return self._newCookies
-	
+
 	def responses( self ):
 		"""Returns the list of responses to the last request. The list is
 		composed of triples (firstline, headers, body)."""
@@ -193,14 +193,14 @@ class HTTPClient:
 		(name, value) pairs and/or attachments as list of (name, value, type)
 		triples. Headers attributes are the same as for the @GET
 		method.
-		
+
 		The @attach parameter is quite special, as the value will depend on the
 		type: if type is @FILE_ATTACHMENT, then value is simply the path to the
 		file, but if the type is @CONTENT_ATTACHMENT, the value is expected to
 		be a triple (filename, mimetype, value).
 		"""
 		raise Exception("GET method must be implemented by HTTPClient subclasses.")
-	
+
 	def _ensureAttachment( self, attach ):
 		"""Ensures that the given attachment is a list of attachments. For
 		instance if attach is a single attachment, it will be returned as
@@ -292,7 +292,7 @@ class HTTPClient:
 				# FIXME: For the moment, chunks are supposed to be separated by
 				# CRLF + CRLF only (this is what google.com returns)
 				off        = message.find(CRLF + CRLF, eoh + 4)
-				if off == -1: off = len(message) 
+				if off == -1: off = len(message)
 				body       = self._decodeBody(message[eoh+4:off], content_encoding, encoding)
 			# Otherwise the body is simply what's left after the headers
 			else:
@@ -300,7 +300,7 @@ class HTTPClient:
 					body = self._decodeBody(message[eoh+4:], content_encoding, encoding)
 				off = len(message)
 			location, cookies = self._parseStatefulHeaders(headers)
-			# WTF: 
+			# WTF:
 			self._redirect    = location
 			self._newCookies.extend(self._parseCookies(cookies))
 			# FIXME: I don't know if it works properly, but at least it handles
@@ -313,7 +313,7 @@ class HTTPClient:
 				assert res, "There must be a first line"
 				res[-1][-1] = res[-1][-1] + CRLF + CRLF + first_line
 				if headers: res[-1][-1] = res[-1][-1] + headers
-				if body: res[-1][-1] = res[-1][-1] + body 
+				if body: res[-1][-1] = res[-1][-1] + body
 		# TODO: It would be good to communicate headers and first_line back
 		self._responses = res
 		return res
@@ -321,10 +321,19 @@ class HTTPClient:
 	def _decodeBody( self, body, contentEncoding=None, encoding=None ):
 		if contentEncoding:
 			if contentEncoding.lower().strip() == "gzip":
-				body = zlib.decompress(body)
+				try:
+					return zlib.decompress(body)
+				except:
+					path = tempfile.mktemp()
+					with open(path, "wb") as f:
+						f.write(body)
+					result = None
+					with gzip.open(path, "rb") as f:
+						result = f.read()
+					os.unlink(path)
+					return result
 				#if encoding: return body.decode(encoding)
 				#else: return body
-				return body
 			else:
 				raise Exception("Unsupported content encoding: " + contentEncoding)
 		else:
@@ -343,7 +352,7 @@ class HTTPClient:
 		cookies    = RE_SET_COOKIE.findall(headers)
 		set_cookie = ";".join(cookies)
 		return location, set_cookie
-	
+
 	def _parseCookies( self, cookies ):
 		"""Returns a pair (name, value) for the given cookies, given as text."""
 		_cookies   = {}

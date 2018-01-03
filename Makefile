@@ -1,7 +1,7 @@
 PROJECT     = wwwclient
-SOURCES     = $(wildcard Sources/$(PROJECT)/*.py)
-MANIFEST    = $(SOURCES) $(wildcard Sources/*.py $(PROJECT)-api.html AUTHORS* README* LICENSE*)
-VERSION     = `grep __version__ Sources/$(PROJECT)/__init__.py | cut -d '=' -f2  | xargs echo`
+SOURCES     = $(wildcard src/$(PROJECT)/*.py)
+MANIFEST    = $(SOURCES) $(wildcard src/*.py $(PROJECT)-api.html AUTHORS* README* LICENSE*)
+VERSION     = `grep __version__ src/$(PROJECT)/__init__.py | cut -d '=' -f2  | xargs echo`
 PRODUCT     = MANIFEST doc
 
 .PHONY: all doc clean check
