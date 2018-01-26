@@ -628,9 +628,15 @@ class TagTree:
 		"""Returns a tag list from this Tree Node."""
 		if self._taglist == None:
 			content = []
-			if self.startTag: content.append(self.startTag)
-			for c in self.children: content.extend(c.list(contentOnly=True))
-			if self.endTag: content.append(self.endTag)
+			if self.startTag:
+				content.append(self.startTag)
+			for c in self.children:
+				if not isinstance(c, TagTree):
+					content.append(c)
+				else:
+					content.extend(c.list(contentOnly=True))
+			if self.endTag:
+				content.append(self.endTag)
 			self._taglist = TagList(content=content)
 		if contentOnly:
 			return self._taglist.content
