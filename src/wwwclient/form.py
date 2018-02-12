@@ -12,9 +12,14 @@
 # Last mod  : 26-Jul-2008
 # -----------------------------------------------------------------------------
 
-import re
+import re, sys
 
 RE_FORMDATA  = re.compile("<(form|input|select|option|textarea)", re.I)
+
+if sys.version_info.major < 3:
+	pass
+else:
+	unicode   = str
 
 # -----------------------------------------------------------------------------
 #

@@ -27,6 +27,7 @@ else:
 	import urllib.parse as urlparse
 	import http.client as http_client
 	url_quote = urlparse.quote
+	unicode   = str
 
 HTTP                = "http"
 HTTPS               = "https"
@@ -754,7 +755,7 @@ class Session:
 					transaction.do()
 					break
 				except Exception as e:
-					if isinstance(e, http.client.IncompleteRead) or isinstance(e, socket.timeout):
+					if isinstance(e, http_client.IncompleteRead) or isinstance(e, socket.timeout):
 						# We retry only on socket timeout or incomplete read
 						if i >= len(retry):
 							return self._failTransaction(transaction, e)
@@ -814,7 +815,7 @@ class Session:
 				try:
 					transaction.do()
 					break
-				except http.client.IncompleteRead as e:
+				except http_client.IncompleteRead as e:
 					if i >= len(retry):
 						raise e
 					else:

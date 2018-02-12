@@ -17,8 +17,10 @@ import wwwclient.client as client
 
 if sys.version_info.major < 3:
 	import urlparse as urlparse
+	import httplib as http_client
 else:
 	import urllib.parse as urlparse
+	import http.client as http_client
 
 # TODO: Add retry support
 class HTTPClient(client.HTTPClient):
@@ -110,9 +112,9 @@ class HTTPClient(client.HTTPClient):
 			raise Exception("URL does not correspond to current host (%s): %s " % (host, url))
 		url_path = url[i+len(host):]
 		if url_parsed[0] == "http":
-			self._http = http.client.HTTPConnection(host, timeout=self.TIMEOUT)
+			self._http = http_client.HTTPConnection(host, timeout=self.TIMEOUT)
 		elif url_parsed[0] == "https":
-			self._http = http.client.HTTPSConnection(host, timeout=self.TIMEOUT)
+			self._http = http_client.HTTPSConnection(host, timeout=self.TIMEOUT)
 		else:
 			raise Exception("Protocol not supported: "  + str(url_parsed[0]))
 		http_headers = {}
