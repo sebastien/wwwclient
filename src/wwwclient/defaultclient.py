@@ -138,7 +138,8 @@ class HTTPClient(client.HTTPClient):
 			res += str(response.status) + " "
 			res += str(response.reason) + client.CRLF
 			res += str(response.msg) + client.CRLF
-			res += response.read()
+			# FIXME: Should look for charset
+			res += str(response.read(), "utf-8")
 			self._closeConnection()
 			return res
 		except Exception as e:
