@@ -13,6 +13,7 @@
 # -----------------------------------------------------------------------------
 
 import os, re, mimetypes, urllib, zlib, gzip, tempfile
+from .compat import *
 
 __doc__ = """\
 This modules defines an abstract class for HTTP clients, that creates a simple,
@@ -217,9 +218,12 @@ class HTTPClient:
 		"""Ensures that the given value will be an encoded string, encoded in
 		this HTTPClient default encoding (set it with the @encoding
 		attribute)."""
-		if   type(value) == unicode: value = value.encode(self.encoding)
-		elif value == None: value = ""
-		else: value = str(value)
+		if   isinstance(value, bytes):
+			value = value.decode(self.encoding)
+		elif value == None:
+			value = ""
+		else:
+			value = str(value)
 		return value
 
 	def _valueToPostData( self, value ):

@@ -29,8 +29,9 @@ class HTTPClient(client.HTTPClient):
 
 	TIMEOUT = 10
 
-	def __init__( self, encoding="latin-1" ):
+	def __init__( self, encoding="utf-8" ):
 		client.HTTPClient.__init__(self, encoding)
+		self._encoding = encoding
 		self._http = None
 
 	def GET  ( self, url, headers=None ):
@@ -116,7 +117,7 @@ class HTTPClient(client.HTTPClient):
 		elif url_parsed[0] == "https":
 			self._http = http_client.HTTPSConnection(host, timeout=self.TIMEOUT)
 		else:
-			raise Exception("Protocol not supported: "  + str(url_parsed[0]))
+			raise Exception("Protocol not supported: {0}".format(url_parsed[0]))
 		http_headers = {}
 		for header in headers:
 			colon = header.find(":")
@@ -133,13 +134,16 @@ class HTTPClient(client.HTTPClient):
 	def _performRequest( self, counter=0 ):
 		try:
 			response = self._http.getresponse()
-			if response.version == 10: res = "HTTP/1.0 "
-			else: res = "HTTP/1.1 "
-			res += str(response.status) + " "
-			res += str(response.reason) + client.CRLF
-			res += str(response.msg) + client.CRLF
-			# FIXME: Should look for charset
-			res += str(response.read(), "utf-8")
+				# TODO: Should use the response encoding
+			body_raw = response.read()
+			body     = body_raw.decode()
+			res  = "HTTP/{version} {status} {reason}\r\n{msg}\r\n{body}".format(
+				version = "1.0" if response.version == 10 else "1.1",
+				status = response.status,
+				reason = response.reason,
+				msg    = response.msg,
+				body   = body
+			)
 			self._closeConnection()
 			return res
 		except Exception as e:
